@@ -1,0 +1,37 @@
+schema_version: 1
+# Registry template for the jruby RUNTIME entry — spec 33's
+# runtime-on-runtime form, and the FIRST universal runtime image: the
+# dist is bytecode + the ruby home with every platform's jffi stub
+# (lib/jni/), so ONE asset serves all triplets. Every platform key below
+# names the SAME universal artifact with the SAME digest — the registry
+# grammar consequence TODO.jruby/02 item 4 pins: the triplet binding of
+# a composed jruby comes from the java OWNER pair, never from this image.
+# Rendered by the publish job (sed tokens from the built sidecars) and
+# landed on main by bot PR (the CLI refuses kind: runtime — runtimes
+# publish through the runtime release flow). kind: runtime entries carry
+# NO entrypoints key (the registry validator: only apps and toolkits
+# declare entrypoints). The on_runtime edge is NOT mirrored here (L3
+# mirrors resolution fields only): it lives in the release shard (the
+# shim's plan-time read) and the in-image manifest (the authority).
+# Platform matrix: temurin owner coverage is the constraint
+# (tebako-packages/openjdk v2.5.0 ships macos-arm64 + linux-gnu-x86_64 +
+# windows-ucrt64). This first release declares the two POSIX rows the
+# acceptance gate covers (TODO.jruby/02); windows-ucrt64 is a named
+# follow-up (the universal image already serves it — the row lands with
+# its CI leg, never silently).
+payloads:
+- name: jruby
+  kind: runtime
+  versions:
+  - version: '10.1.1.0'
+    implementation: jruby
+    platforms:
+      aarch64-macos:
+        artifact: tebako-runtime-2.5.0-10.1.1.0-universal.tfs
+        sha256: 'd41773733c8192d94772e59f89e8ec4f38631a7efc96b77faab6a37481799652'
+      x86_64-linux-gnu:
+        artifact: tebako-runtime-2.5.0-10.1.1.0-universal.tfs
+        sha256: 'd41773733c8192d94772e59f89e8ec4f38631a7efc96b77faab6a37481799652'
+    release:
+      ref: tfs:github:tebako-packages/jruby:v2.5.0
+  default: '10.1.1.0'
