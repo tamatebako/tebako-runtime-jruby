@@ -1,0 +1,64 @@
+schema_version: 1
+# Runtime manifest template for jruby (spec 33 §2 — the runtime-on-runtime
+# form): the env image is the jruby home (UNIVERSAL — the dist ships every
+# platform's jffi stub under lib/jni/, so ONE image serves all triplets;
+# the triplet binding comes from the composed java owner pair), composed
+# ON a java owner at dispatch. The in-image on_runtime block is the
+# AUTHORITY (the release shard mirrors it for the shim's plan-time read;
+# the driver cross-checks). Filled from recipe.yml's flavors.jvm block by
+# tools/build; every fact below is the 2026-09-07 probe's
+# (TODO.jruby/02-probe-2026-09-07.md), never re-derived.
+identity:
+  schema_version: 1
+  kind: runtime
+  name: "jruby"
+  version: "@@VERSION@@"
+  producer: {tool: feedstock-build, tool_version: "1"}
+  created: "@@CREATED@@"
+  source: {src_sha256: "@@UPSTREAM_SHA256@@", commit: "@@UPSTREAM_COMMIT@@", builder: "local"}
+  digest:
+    tree_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"  # placeholder until the CAS lands (spec 03)
+    blob_sha256: "@@BLOB_SHA256@@"   # zeroed inside the image (spec 03 §7)
+  signing: {state: unsigned}
+  encryption: {state: none}
+  # spec 33 §2's bridge law: compound {mount} argv tokens splice the
+  # materialized whole-tree home root, and the trigger reads the LITERAL
+  # key identity.annotations.java_home — the mechanism is runtime-neutral
+  # but the key name is not (tebako#548 tracks the neutral `home` key).
+  # Unannotated = named exit 65. The argv template's -Djruby.home token
+  # is LOAD-BEARING (probed 2026-09-07): `-jar` alone boots but RubyGems
+  # never loads ("`RubyGems' were not loaded" / LoadError on json); the
+  # explicit home wires the gem paths to the materialized tree.
+  annotations: {java_home: "/"}
+provides:
+  # one-or-many on the wire (tpkg::RuntimeProvides' serde): ONE entry per
+  # platform this UNIVERSAL image covers — the model's own multi-platform
+  # form ("one entry per platform the image covers"). tools/build renders
+  # the list from the recipe's flavors.jvm.platforms coverage.
+  provides:
+@@PROVIDES_YAML@@
+  built_from:
+    src_sha256: "@@UPSTREAM_SHA256@@"
+    patch_set: "none"   # a repack applies no patches; the field is required non-empty
+  # The spawn surface (spec 30 §2), rendered from the recipe's flavor
+  # entrypoints (the feedstock SSOT): TODO.jruby/02's named three
+  # (jruby, jgem, jirb). The entry DISPATCH never executes the bin/
+  # scripts — the driver composes the owner java + argv_template; the
+  # declarations anchor the spawn-surface existence checks. jgem/jirb
+  # dispatch rides the composed wire's user args (the local gate's
+  # record), never a second launch path.
+  entrypoints:
+@@ENTRYPOINTS_YAML@@
+  # The owner edge + compose template (spec 33 §2). ANY java >= 21 (the
+  # jar's Build-Jdk-Spec) — temurin is the default pick; unlike
+  # truffleruby-jvm there is NO implementation constraint (jruby brings
+  # its own JIT; the graalvm compiler is not needed). The whole runtime
+  # is lib/jruby.jar (Main-Class: org.jruby.main.Main).
+  on_runtime:
+    mount: "@@ON_MOUNT@@"
+    argv_template:
+@@ARGV_YAML@@
+  env: {}
+  capabilities: {exec: true, read: true, runtime: true}
+requires:
+  - {kind: runtime, engine: "@@ON_ENGINE@@", constraint: "@@ON_CONSTRAINT@@"}
