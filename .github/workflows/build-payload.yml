@@ -261,6 +261,11 @@ jobs:
           git config user.name "tebako-ci"
           git config user.email "tebako@ribose.com"
           git fetch origin main
+          # intent-to-add: git diff does not see UNTRACKED files — without
+          # this the first-ever publish (main has no tpkg-registry.yaml yet)
+          # silently reports "unchanged" and no registry PR opens (the
+          # v2.5.0 publish, 2026-09-07).
+          git add -N tpkg-registry.yaml
           if git diff --quiet origin/main -- tpkg-registry.yaml; then
             echo "registry unchanged (or the entry already landed on main)"
             exit 0
