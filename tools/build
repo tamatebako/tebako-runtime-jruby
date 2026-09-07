@@ -1,0 +1,625 @@
+#!/usr/bin/env bash
+# tools/build — the jruby RUNTIME feedstock builder, in two roles
+# (docs/conventions.md in tebako-packages/index):
+#
+#   ROLE=image  build the UNIVERSAL env image ONCE (the dist is bytecode +
+#               the ruby home + every platform's jffi stub — one asset
+#               serves all triplets): fetch the pinned universal archive,
+#               sha256-verify (two-anchor: the recipe pin == upstream's
+#               published .sha256 sidecar), stage, dereference in-tree
+#               symlinks (the writer has no link node type), embed the
+#               tier-1 runtime manifest at /__tpkg__/manifest.yaml (blob
+#               digest zeroed, spec 03 §7; the one-or-many provides list
+#               declares every covered platform) and the layout
+#               declaration at /lib/tebako/layout.yaml (NO interpreter —
+#               spec 33 §5), image with tfs-cli's in-process dwarfs-t
+#               writer, read-back gates, sidecar + release-tier manifest.
+#
+#   ROLE=pair   per-triplet: pair the wrapper exe (the 2.5.0
+#               tebako-runtime-launcher — byte-identical to
+#               tamatebako/tebako's own asset; it anchors the store
+#               entry's well-formedness and the standalone fail-closed
+#               smoke, it is NEVER the composed process's owner), write
+#               the per-triplet release shard (image.filename = the
+#               universal asset — tpkg::runtime_store::entry_asset_names
+#               flows it verbatim, no product change), then the smokes:
+#               the standalone NEGATIVE gate (exit 65, spec 33 §5) and
+#               the COMPOSED smoke (shim → this runtime → the published
+#               temurin owner; a probe payload prints RUBY_ENGINE and
+#               loads json through jruby's own default gem).
+#
+# Inputs (env; the workflow's matrix exports the per-leg values):
+#   ROLE           image | pair        (REQUIRED)
+#   FLAVOR         the recipe's flavor key (default: jvm — the only mode)
+#   TRIPLET        spec 03 triplet        (pair legs; default aarch64-macos)
+#   ASSET_PLATFORM release-asset name form (pair legs; default macos-arm64)
+#   TAR            archiver               (default: tar)
+#   TFS_CLI        tfs-cli binary, the in-process imager (default: tfs)
+#   WRAPPER_BIN    the tebako-runtime-launcher exe (pair legs, REQUIRED)
+#   SHIM_BIN       the tebako-shim exe (pair legs, REQUIRED — the smoke)
+#   IMAGE_TARBALL  ROLE=pair: the image leg's artifact dir carrying
+#                  <IMAGE_STEM>.tfs + .sha256 (REQUIRED — the pair leg
+#                  never rebuilds the image; one image, one digest)
+#   WORK           build workspace (default: out/work-$ROLE[-$TRIPLET])
+#   OUT            artifact dir   (default: out/$ROLE[-$TRIPLET])
+#
+# Produces: ROLE=image → $OUT/<IMAGE_STEM>.tfs + .sha256 + the
+# release-tier payload manifest. ROLE=pair → $OUT/<STEM> (exe) + .sha256
+# + <STEM>.manifest.json (the shard).
+set -euo pipefail
+
+FEEDSTOCK="$(cd "$(dirname "$0")/.." && pwd)"
+ROLE="${ROLE:-}"
+FLAVOR="${FLAVOR:-jvm}"
+TRIPLET="${TRIPLET:-aarch64-macos}"
+ASSET_PLATFORM="${ASSET_PLATFORM:-macos-arm64}"
+TAR="${TAR:-tar}"
+
+TFS_CLI="${TFS_CLI:-tfs}"
+WRAPPER_BIN="${WRAPPER_BIN:-}"
+SHIM_BIN="${SHIM_BIN:-}"
+IMAGE_TARBALL="${IMAGE_TARBALL:-}"
+
+case "$ROLE" in
+  image)
+    WORK="${WORK:-$FEEDSTOCK/out/work-image}"
+    OUT="${OUT:-$FEEDSTOCK/out/image}" ;;
+  pair)
+    WORK="${WORK:-$FEEDSTOCK/out/work-pair-$TRIPLET}"
+    OUT="${OUT:-$FEEDSTOCK/out/pair-$TRIPLET}" ;;
+  *) echo "ROLE must be image or pair"; exit 64 ;;
+esac
+
+step() { printf '\n== %s\n' "$*"; }
+
+# sha256sum exists on linux; macOS has only shasum.
+sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
+sha256_check() { echo "$1  $2" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }; }
+filesize() { stat -f%z "$1" 2>/dev/null || stat -c%s "$1"; }
+
+# The recipe carries a flavor dimension: flavors:<FLAVOR> holds the
+# per-flavor scalars (4-space indent), its upstream: block the
+# version/tag scalars (6-space) and the sources array (8/10-space).
+# Parse without a YAML dependency (the recipe's shape is the feedstock's
+# own convention, indentation-anchored). FLAVOR names the block; an
+# unknown flavor reads empty and fails the presence checks below — a
+# named error, never a guess (spec 00 §9).
+_flavor_scope='
+  /^flavors:/ { infl = 1; next }
+  /^[a-z_]+:/ { infl = 0 }
+  infl && index($0, "  " flavor ":") == 1 { inf = 1; next }
+  infl && inf && /^  [a-z_]+:/ { inf = 0 }
+  !(infl && inf) { next }
+'
+recipe_flavor_value() {
+  # per-flavor scalar (implementation, language_version, abi_line,
+  # interpreter_api_version, entrypoints, platforms) — 4-space under the
+  # flavor key.
+  awk -v flavor="$FLAVOR" -v key="$1" "$_flavor_scope"'
+    $0 ~ ("^    " key ":") {
+      line = $0
+      sub("^    " key ": *", "", line)
+      sub("^\"", "", line)
+      sub("\".*$", "", line)
+      sub(/[ \t]+#.*$/, "", line)
+      sub(/[ \t]+$/, "", line)
+      print line
+      exit
+    }
+  ' "$FEEDSTOCK/recipe.yml"
+}
+recipe_value() {
+  # the flavor's upstream scalar (version, tag) — 6-space; tolerates
+  # trailing comments — the value ends at the closing quote; anything
+  # after it is dropped
+  awk -v flavor="$FLAVOR" -v key="$1" "$_flavor_scope"'
+    $0 ~ ("^      " key ":") {
+      line = $0
+      sub("^      " key ": *\"?", "", line)
+      sub("\".*$", "", line)
+      sub(/[ \t]+#.*$/, "", line)
+      sub(/[ \t]+$/, "", line)
+      print line
+      exit
+    }
+  ' "$FEEDSTOCK/recipe.yml"
+}
+recipe_source_value() {
+  # The ONE universal source (jruby ships no per-platform archives): the
+  # sources array's single entry is platform "universal".
+  awk -v flavor="$FLAVOR" -v key="$1" "$_flavor_scope"'
+    /^        - platform: "universal"/ { active = 1 }
+    active && $0 ~ ("^          " key ":") {
+      sub("^          " key ": *\"?", "")
+      sub("\"$", "")
+      print
+      exit
+    }
+  ' "$FEEDSTOCK/recipe.yml"
+}
+# The runtime block's scalars (indented two under the top-level
+# `runtime:` key) — the SHARED contract keys. Quoted and unquoted values
+# both parse; trailing comments are dropped either way.
+recipe_runtime_value() {
+  awk -v key="$1" '
+    /^runtime:/ { inrt = 1; next }
+    /^[a-z_]+:/ { inrt = 0 }
+    inrt && $0 ~ "^  " key ":" {
+      line = $0
+      sub("^  " key ": *", "", line)
+      sub("^\"", "", line)
+      sub("\".*$", "", line)
+      sub(/[ \t]+#.*$/, "", line)
+      sub(/[ \t]+$/, "", line)
+      print line
+      exit
+    }
+  ' "$FEEDSTOCK/recipe.yml"
+}
+# The flavor's on_runtime sub-scalars (6-space under the 4-space
+# on_runtime: key — spec 33 §2's owner edge) and the raw (unstripped)
+# flavor scalar for the argv_template flow seq (its tokens are QUOTED —
+# `{mount}` opens a flow mapping unquoted — so the generic value reader's
+# quote-trimming would mangle it; the raw line is sed-parsed below).
+recipe_onruntime_value() {
+  awk -v flavor="$FLAVOR" -v key="$1" "$_flavor_scope"'
+    /^    on_runtime:/ { inor = 1; next }
+    inor && /^    [a-z_]+:/ { inor = 0 }
+    inor && $0 ~ ("^      " key ":") {
+      line = $0
+      sub("^      " key ": *", "", line)
+      sub("^\"", "", line)
+      sub("\".*$", "", line)
+      sub(/[ \t]+#.*$/, "", line)
+      sub(/[ \t]+$/, "", line)
+      print line
+      exit
+    }
+  ' "$FEEDSTOCK/recipe.yml"
+}
+recipe_flavor_raw() {
+  awk -v flavor="$FLAVOR" -v key="$1" "$_flavor_scope"'
+    $0 ~ ("^    " key ": *") {
+      line = $0
+      sub("^    " key ": *", "", line)
+      sub(/[ \t]+#.*$/, "", line)
+      sub(/[ \t]+$/, "", line)
+      print line
+      exit
+    }
+  ' "$FEEDSTOCK/recipe.yml"
+}
+
+VERSION="$(recipe_value version)"
+TAG="$(recipe_value tag)"
+URL="$(recipe_source_value url)"
+SHA256="$(recipe_source_value sha256)"
+STRIP="$(recipe_source_value strip_components)"
+[ -n "$VERSION" ] && [ -n "$TAG" ] && [ -n "$URL" ] && [ -n "$SHA256" ] && [ -n "$STRIP" ] || {
+  echo "recipe.yml flavors.$FLAVOR upstream version/tag or the universal sources entry unreadable (unknown FLAVOR?)"; exit 1; }
+
+ENGINE="$(recipe_runtime_value engine)"
+IMPLEMENTATION="$(recipe_flavor_value implementation)"
+ABI_LINE="$(recipe_flavor_value abi_line)"
+API_VERSION="$(recipe_flavor_value interpreter_api_version)"
+INTERPRETER="$(recipe_runtime_value interpreter)"
+WRAPPER_TEBAKO="$(recipe_flavor_value wrapper_tebako)"
+[ -n "$WRAPPER_TEBAKO" ] || WRAPPER_TEBAKO="$(recipe_runtime_value wrapper_tebako)"
+SMOKE_ARGS="$(recipe_runtime_value smoke_args)"
+# The entrypoints + platform-coverage flow lists: [a, b, …] → a
+# space-separated shell list.
+ENTRYPOINTS="$(recipe_flavor_value entrypoints | sed -E 's/^\[//; s/\]$//; s/,/ /g')"
+COVERAGE="$(recipe_flavor_value platforms | sed -E 's/^\[//; s/\]$//; s/,/ /g')"
+# spec 33: the on_runtime edge defines this runtime (jruby has no other
+# mode) — all four keys mandatory except implementation (jruby's edge
+# has none by design: any java >= 21 owns it).
+ON_ENGINE="$(recipe_onruntime_value engine)"
+ON_CONSTRAINT="$(recipe_onruntime_value constraint)"
+ON_MOUNT="$(recipe_onruntime_value mount)"
+for v in ENGINE IMPLEMENTATION ABI_LINE API_VERSION INTERPRETER WRAPPER_TEBAKO SMOKE_ARGS ON_ENGINE ON_CONSTRAINT ON_MOUNT; do
+  eval "val=\$$v"
+  [ -n "$val" ] || { echo "recipe.yml runtime/flavors.$FLAVOR .${v} unreadable (or empty)"; exit 1; }
+done
+[ -n "$ENTRYPOINTS" ] || { echo "recipe.yml flavors.$FLAVOR.entrypoints unreadable (or empty)"; exit 1; }
+[ -n "$COVERAGE" ] || { echo "recipe.yml flavors.$FLAVOR.platforms (the coverage list) unreadable (or empty)"; exit 1; }
+INT_NAME="$(basename "$INTERPRETER")"
+
+# The compose template: one quoted, space-free token per element; strip
+# the flow brackets, split on '", "' boundaries.
+ARGV_TOKENS="$(recipe_flavor_raw argv_template | sed -E 's/^\[//; s/\][ \t]*$//; s/^"//; s/"$//; s/", *"/\n/g')"
+[ -n "$ARGV_TOKENS" ] || { echo "recipe.yml flavors.$FLAVOR.argv_template unreadable (or empty)"; exit 1; }
+ARGV_YAML=""
+while IFS= read -r tok; do
+  ARGV_YAML="$ARGV_YAML      - \"$tok\"
+"
+done <<EOF
+$ARGV_TOKENS
+EOF
+
+# The one-or-many provides list (tpkg::RuntimeProvides' serde): one
+# EngineProvides mapping per covered platform, rendered from COVERAGE.
+PROVIDES_YAML=""
+for cov in $COVERAGE; do
+  PROVIDES_YAML="$PROVIDES_YAML    - {engine: \"$ENGINE\", version: \"$VERSION\", abi_line: \"$ABI_LINE\", platform: $cov, implementation: \"$IMPLEMENTATION\"}
+"
+done
+
+# Per-platform spellings (pair legs): the layout's mount_root must equal
+# the wrapper exe's compiled-in WRAPPER_RUNTIME_ROOT (a mismatch is exit
+# 78). (Every leg of this feedstock is POSIX today; the windows case
+# stays spelled so the named follow-up leg fails into a branch, never a
+# guess.)
+case "$TRIPLET" in
+  *windows*) MOUNT_ROOT="A:/t" ;;
+  *macos*)   MOUNT_ROOT="/__tfs__" ;;
+  *linux*)   MOUNT_ROOT="/__tfs__" ;;
+  *) echo "unsupported TRIPLET $TRIPLET"; exit 1 ;;
+esac
+
+case "$URL" in
+  *.zip)     EXT=".zip" ;;
+  *.tar.gz)  EXT=".tar.gz" ;;
+  *) echo "unsupported upstream archive extension in $URL"; exit 1 ;;
+esac
+
+STEM="tebako-runtime-$WRAPPER_TEBAKO-$VERSION-$ASSET_PLATFORM"          # the per-triplet EXE stem
+IMAGE_STEM="tebako-runtime-$WRAPPER_TEBAKO-$VERSION-universal"          # the ONE image stem
+
+mkdir -p "$WORK" "$OUT"
+
+if [ "$ROLE" = image ]; then
+# =================================================================== image
+  step "fetch + sha256-verify $IMPLEMENTATION $VERSION (universal)"
+  ARCHIVE="$WORK/$IMPLEMENTATION-home$EXT"
+  if [ ! -f "$ARCHIVE" ]; then
+    curl -sL --fail -o "$ARCHIVE" "$URL"
+  fi
+  sha256_check "$SHA256" "$ARCHIVE"
+  # Two-anchor: the recipe pin must equal upstream's published sidecar
+  # (Maven Central ships .sha256 next to the artifact).
+  if got="$(curl -sL --fail "$URL.sha256")"; then
+    got="${got%% *}"
+    [ "$got" = "$SHA256" ] || { echo "::error::upstream sidecar disagrees with the recipe pin: sidecar=$got recipe=$SHA256"; exit 1; }
+    echo "upstream .sha256 sidecar agrees with the recipe pin"
+  else
+    echo "::warning::upstream sidecar unfetchable — the recipe pin alone anchors $ARCHIVE"
+  fi
+
+  step "stage the payload tree (strip $STRIP)"
+  ROOT="$WORK/root"
+  rm -rf "$ROOT" 2>/dev/null || mv "$ROOT" "$ROOT.stale.$$"
+  mkdir -p "$ROOT"
+  # The archive nests the home under one directory (jruby-<ver>/). The
+  # home's own layout IS the payload layout (/bin/jruby, /lib/jruby.jar,
+  # /lib/ruby, /lib/jni, …).
+  "$TAR" -xf "$ARCHIVE" -C "$ROOT" --strip-components="$STRIP"
+  [ -x "$ROOT$INTERPRETER" ] || { echo "no $INTERPRETER in the staged tree"; exit 1; }
+  [ -f "$ROOT/lib/jruby.jar" ] || { echo "no lib/jruby.jar in the staged tree — the whole runtime is that jar"; exit 1; }
+
+  # The dwarfs-t writer has no symlink node type (verified 2026-09-06 on
+  # the graalvm tree: a symlink lands as a 0-byte regular-file node that
+  # stat cannot open — silent zeroing; the named ecosystem follow-up
+  # stands: the writer should store link nodes or refuse loudly). The
+  # stage dereferences every symlink whose terminal target is a real file
+  # INSIDE the staged tree; a dangling or tree-escaping link is a named
+  # error here, never a silent 0-byte node in the image.
+  step "dereference in-tree symlinks (the writer has no link node type)"
+  resolve_link() {
+    local p="$1" t d n=0
+    while [ -L "$p" ]; do
+      n=$((n+1)); [ "$n" -gt 8 ] && return 1
+      t="$(readlink "$p")"
+      case "$t" in /*) return 2 ;; esac
+      d="$(cd "$(dirname "$p")" && cd "$(dirname "$t")" 2>/dev/null && pwd -P)" || return 1
+      p="$d/$(basename "$t")"
+    done
+    [ -f "$p" ] || return 1
+    printf '%s' "$p"
+  }
+  deref_count=0
+  while IFS= read -r link; do
+    rel="${link#"$ROOT"/}"
+    if resolved="$(resolve_link "$link")"; then
+      case "$resolved" in
+        "$ROOT"/*) : ;;
+        *) echo "symlink $rel resolves outside the payload tree: $resolved"; exit 1 ;;
+      esac
+      rm "$link" && cp "$resolved" "$link"
+      deref_count=$((deref_count+1))
+    else
+      rc=$?
+      [ "$rc" = 2 ] && echo "symlink $rel has an ABSOLUTE target (escapes the VFS root): $(readlink "$link")" \
+                    || echo "symlink $rel dangles or loops"
+      exit 1
+    fi
+  done < <(find "$ROOT" -type l)
+  echo "dereferenced: $deref_count"
+
+  step "embed /__tpkg__/manifest.yaml (blob digest zeroed, spec 03 §7)"
+  mkdir -p "$ROOT/__tpkg__"
+  EP_YAML=""
+  for ep in $ENTRYPOINTS; do
+    EP_YAML="$EP_YAML    - {name: \"$ep\", path: \"/bin/$ep\"}
+"
+  done
+  sed -e "s|@@NAME@@|jruby|g" \
+      -e "s|@@VERSION@@|$VERSION|g" \
+      -e "s|@@CREATED@@|$(date -u +%Y-%m-%dT%H:%M:%SZ)|g" \
+      -e "s|@@UPSTREAM_SHA256@@|$SHA256|g" \
+      -e "s|@@UPSTREAM_COMMIT@@|$TAG|g" \
+      -e "s|@@BLOB_SHA256@@|0000000000000000000000000000000000000000000000000000000000000000|g" \
+      -e "s|@@ENGINE@@|$ENGINE|g" \
+      -e "s|@@IMPLEMENTATION@@|$IMPLEMENTATION|g" \
+      -e "s|@@ON_ENGINE@@|$ON_ENGINE|g" \
+      -e "s|@@ON_CONSTRAINT@@|$ON_CONSTRAINT|g" \
+      -e "s|@@ON_MOUNT@@|$ON_MOUNT|g" \
+      "$FEEDSTOCK/manifests/runtime.yaml" |
+    EP_YAML="$EP_YAML" ARGV_YAML="$ARGV_YAML" PROVIDES_YAML="$PROVIDES_YAML" awk '{
+      if (index($0, "@@ENTRYPOINTS_YAML@@")) printf "%s", ENVIRON["EP_YAML"];
+      else if (index($0, "@@ARGV_YAML@@")) printf "%s", ENVIRON["ARGV_YAML"];
+      else if (index($0, "@@PROVIDES_YAML@@")) printf "%s", ENVIRON["PROVIDES_YAML"];
+      else print }' \
+      > "$ROOT/__tpkg__/manifest.yaml"
+
+  step "embed /lib/tebako/layout.yaml (the pair contract — NO interpreter, spec 33 §5)"
+  mkdir -p "$ROOT/lib/tebako"
+  sed -e "s|@@MOUNT_ROOT@@|$MOUNT_ROOT|g" \
+      -e "s|@@API_VERSION@@|$API_VERSION|g" \
+      "$FEEDSTOCK/manifests/layout.yaml" > "$ROOT/lib/tebako/layout.yaml"
+
+  step "tfs mkimage (the in-process dwarfs-t writer)"
+  IMG="$OUT/$IMAGE_STEM.tfs"
+  rm -f "$IMG"
+  "$TFS_CLI" mkimage --format dwarfs "$ROOT" --output "$IMG"
+  sha=$(sha256_of "$IMG")
+  echo "image: $IMG"
+  echo "sha256: $sha"
+  printf '%s  %s\n' "$sha" "$IMAGE_STEM.tfs" > "$IMG.sha256"
+
+  # Read-back: a broken image fails THIS leg, never the publish step.
+  step "read-back: embedded manifest validates, layout + declared entrypoints present"
+  native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+  IMG_NATIVE="$(native_path "$IMG")"
+  MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" stat "$IMG_NATIVE" /__tpkg__/manifest.yaml >/dev/null || {
+    echo "read-back FAILED: no /__tpkg__/manifest.yaml in $IMG"; exit 1; }
+  MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" stat "$IMG_NATIVE" /lib/tebako/layout.yaml >/dev/null || {
+    echo "read-back FAILED: no /lib/tebako/layout.yaml in $IMG"; exit 1; }
+  echo "read-back: /lib/tebako/layout.yaml present"
+  INFO="$(MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" info --json "$IMG_NATIVE")" || {
+    echo "read-back FAILED: tfs info cannot read $IMG"; exit 1; }
+  case "$INFO" in
+    *'"manifest_error"'*)
+      printf '%s\n' "$INFO" | grep '"manifest_error"' >&2
+      echo "read-back FAILED: embedded manifest does not validate" >&2; exit 1 ;;
+  esac
+  for ep in $ENTRYPOINTS; do
+    MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" stat "$IMG_NATIVE" "/bin/$ep" >/dev/null || {
+      echo "read-back FAILED: declared entrypoint /bin/$ep missing from $IMG"; exit 1; }
+    echo "read-back: /bin/$ep present"
+  done
+
+  step "fill the sibling manifest (release tier: real blob sha)"
+  sed -e "s|@@BLOB_SHA256@@|$sha|g" \
+      "$ROOT/__tpkg__/manifest.yaml" > "$OUT/payload-$FLAVOR-universal.yaml"
+  echo "manifest: $OUT/payload-$FLAVOR-universal.yaml"
+  echo "IMAGE-LEG-DONE sha256=$sha"
+
+else
+# ==================================================================== pair
+  step "pair the wrapper exe ($STEM)"
+  [ -n "$WRAPPER_BIN" ] && [ -f "$WRAPPER_BIN" ] || {
+    echo "WRAPPER_BIN (the tebako-runtime-launcher exe) is required — the pair ships both artifacts"; exit 1; }
+  EXE_OUT="$OUT/$STEM"
+  cp "$WRAPPER_BIN" "$EXE_OUT"
+  chmod 755 "$EXE_OUT"
+  exe_sha=$(sha256_of "$EXE_OUT")
+  echo "wrapper: $EXE_OUT"
+  echo "sha256: $exe_sha"
+  printf '%s  %s\n' "$exe_sha" "$STEM" > "$EXE_OUT.sha256"
+
+  step "take the universal image (built once by the image leg)"
+  [ -n "$IMAGE_TARBALL" ] && [ -f "$IMAGE_TARBALL/$IMAGE_STEM.tfs" ] || {
+    echo "IMAGE_TARBALL must name the image leg's artifact dir carrying $IMAGE_STEM.tfs"; exit 1; }
+  IMG="$OUT/$IMAGE_STEM.tfs"
+  rm -f "$IMG"  # a prior run left it 0444
+  cp "$IMAGE_TARBALL/$IMAGE_STEM.tfs" "$IMG"
+  chmod 444 "$IMG"
+  # The sidecar is the digest channel (the image leg wrote it).
+  want_img_sha="$(cut -d' ' -f1 "$IMAGE_TARBALL/$IMAGE_STEM.tfs.sha256")"
+  sha256_check "$want_img_sha" "$IMG"
+  img_sha="$want_img_sha"
+  echo "image: $IMG (sha256 verified against the image leg's sidecar)"
+
+  step "the release shard (<stem>.manifest.json — image.filename = the UNIVERSAL asset)"
+  ARCHIVE_NAME="$(basename "$URL")"
+  RELEASE_REF="${GITHUB_REF_NAME:-local}"
+  # The shard mirrors the on_runtime edge for the shim's plan-time read
+  # (spec 33 §2; the in-image block stays the authority — the driver
+  # cross-checks). jruby's edge carries NO implementation (any java >=
+  # 21). "abi": "none" is the cext sentinel: jruby runs NO native
+  # extensions, and a native-extension payload (whose runtime_requirement
+  # declares the ruby platform string as abi) must fail AT DISPATCH with
+  # the resolver's named abi-mismatch error — never match through the
+  # absent-field compat window and crash late (TODO.jruby/02's
+  # acceptance). The MRI line's real abi strings never equal "none".
+  cat > "$OUT/$STEM.manifest.json" <<EOF
+{
+  "tebako_version": "$WRAPPER_TEBAKO",
+  "contract_era": 2,
+  "contract_version": 2,
+  "ruby_version": "$VERSION",
+  "implementation": "$IMPLEMENTATION",
+  "platform": "$ASSET_PLATFORM",
+  "abi": "none",
+  "filename": "$STEM",
+  "sha256": "$exe_sha",
+  "size_bytes": $(filesize "$EXE_OUT"),
+  "mount_root": "$MOUNT_ROOT",
+  "image_layout": 1,
+  "built_from": {
+    "release": "tebako-packages/jruby@$RELEASE_REF",
+    "sources": [
+      {"name": "$ARCHIVE_NAME", "sha256": "$SHA256"}
+    ]
+  },
+  "on_runtime": {"engine": "$ON_ENGINE", "constraint": "$ON_CONSTRAINT", "mount": "$ON_MOUNT"},
+  "image": {
+    "filename": "$IMAGE_STEM.tfs",
+    "sha256": "$img_sha",
+    "size_bytes": $(filesize "$IMG")
+  }
+}
+EOF
+  echo "shard: $OUT/$STEM.manifest.json"
+
+  # ------------------------------------------------------ jvm-mode smokes
+  step "standalone NEGATIVE smoke (spec 33 §5: the pair alone fails closed)"
+  mkdir -p "$WORK/tmp"
+  set +e
+  out=$(env \
+      TEBAKO_RUNTIME_IMAGE="$IMG" \
+      TMPDIR="$WORK/tmp" \
+      "$EXE_OUT" --tebako-entry "$INT_NAME" $SMOKE_ARGS 2>&1)
+  rc=$?
+  set -e
+  echo "$out" | head -3
+  [ "$rc" = 65 ] || { echo "::error::standalone jvm boot wanted exit 65 (named fail-closed), got $rc"; exit 1; }
+  echo "standalone negative smoke OK (exit 65)"
+
+  step "composed smoke (shim → this runtime → the published temurin owner)"
+  # The pins (pins.rb): OWNER_REPO/OWNER_RELEASE/OWNER_STEM/
+  # OWNER_STORE_ID/OWNER_EXE_SHA256/OWNER_IMAGE_SHA256/DEP_STORE_ID and
+  # the TEBAKO_SHIM_ASSET/TEBAKO_SHIM_SHA256 tool pins. SHIM_BIN is the
+  # downloaded dispatcher (the workflow's fetch step).
+  for v in OWNER_REPO OWNER_RELEASE OWNER_STEM OWNER_STORE_ID OWNER_EXE_SHA256 OWNER_IMAGE_SHA256 DEP_STORE_ID; do
+    eval "val=\${$v:-}"
+    [ -n "$val" ] || { echo "::error::$v unset — run tools/pins.rb for this leg first (the composed smoke pins)"; exit 1; }
+  done
+  [ -n "$SHIM_BIN" ] && [ -f "$SHIM_BIN" ] || { echo "::error::SHIM_BIN (the tebako-shim exe) is required for the composed smoke"; exit 1; }
+
+  STORE="$WORK/store"
+  rm -rf "$STORE" 2>/dev/null || mv "$STORE" "$STORE.stale.$$"
+  mkdir -p "$STORE/runtimes/$OWNER_STORE_ID" "$STORE/runtimes/$DEP_STORE_ID" \
+           "$STORE/payloads/rbcsmoke" "$STORE/shims"
+
+  # The owner entry: the PUBLISHED temurin pair (releases are the
+  # interface), sha256-verified against BOTH the recipe pins and the
+  # owner release's own SHA256SUMS (the two-anchor rule).
+  obase="https://github.com/$OWNER_REPO/releases/download/$OWNER_RELEASE"
+  curl -sL --fail -o "$WORK/owner.exe" "$obase/$OWNER_STEM"
+  curl -sL --fail -o "$WORK/owner.tfs" "$obase/$OWNER_STEM.tfs"
+  curl -sL --fail -o "$WORK/owner.manifest.json" "$obase/$OWNER_STEM.manifest.json"
+  curl -sL --fail -o "$WORK/owner-SHA256SUMS.txt" "$obase/SHA256SUMS.txt"
+  sha256_check "$OWNER_EXE_SHA256" "$WORK/owner.exe"
+  sha256_check "$OWNER_IMAGE_SHA256" "$WORK/owner.tfs"
+  for f in "$OWNER_STEM" "$OWNER_STEM.tfs"; do
+    want="$( [ "$f" = "$OWNER_STEM" ] && echo "$OWNER_EXE_SHA256" || echo "$OWNER_IMAGE_SHA256" )"
+    got="$(awk -v a="$f" '$2 == a {print $1}' "$WORK/owner-SHA256SUMS.txt")"
+    [ "$got" = "$want" ] || { echo "::error::owner release sums disagree with the recipe pin for $f"; exit 1; }
+  done
+  odir="$STORE/runtimes/$OWNER_STORE_ID"
+  cp "$WORK/owner.exe" "$odir/$OWNER_STEM" && chmod 755 "$odir/$OWNER_STEM"
+  cp "$WORK/owner.tfs" "$odir/$OWNER_STEM.tfs" && chmod 444 "$odir/$OWNER_STEM.tfs"
+  printf '%s  %s\n' "$OWNER_EXE_SHA256" "$OWNER_STEM" > "$odir/sha256"
+  printf '%s  %s\n' "$OWNER_IMAGE_SHA256" "$OWNER_STEM.tfs" > "$odir/$OWNER_STEM.tfs.sha256"
+  printf 'url=%s/%s\nsha256=%s\n' "$obase" "$OWNER_STEM" "$OWNER_EXE_SHA256" > "$odir/origin"
+  printf 'url=%s/%s.tfs\nsha256=%s\n' "$obase" "$OWNER_STEM" "$OWNER_IMAGE_SHA256" > "$odir/$OWNER_STEM.tfs.origin"
+  # The store's manifest.json is the release shard, array-wrapped.
+  ruby -rjson -e 'puts JSON.pretty_generate([JSON.parse(File.read(ARGV[0]))])' \
+    "$WORK/owner.manifest.json" > "$odir/manifest.json"
+
+  # The dep entry: the pair THIS leg just built (per-triplet exe +
+  # the UNIVERSAL image + this leg's shard).
+  ddir="$STORE/runtimes/$DEP_STORE_ID"
+  cp "$EXE_OUT" "$ddir/$STEM" && chmod 755 "$ddir/$STEM"
+  cp "$IMG" "$ddir/$IMAGE_STEM.tfs" && chmod 444 "$ddir/$IMAGE_STEM.tfs"
+  printf '%s  %s\n' "$exe_sha" "$STEM" > "$ddir/sha256"
+  printf '%s  %s\n' "$img_sha" "$IMAGE_STEM.tfs" > "$ddir/$IMAGE_STEM.tfs.sha256"
+  printf 'url=file://%s\nsha256=%s\n' "$EXE_OUT" "$exe_sha" > "$ddir/origin"
+  printf 'url=file://%s\nsha256=%s\n' "$IMG" "$img_sha" > "$ddir/$IMAGE_STEM.tfs.origin"
+  ruby -rjson -e 'puts JSON.pretty_generate([JSON.parse(File.read(ARGV[0]))])' \
+    "$OUT/$STEM.manifest.json" > "$ddir/manifest.json"
+
+  # The probe payload (kind app, runtime_requirement ruby:jruby) — the
+  # spec-33 dogfood's P-cell shape: prints RUBY_ENGINE and loads the json
+  # default gem (jruby's own java-backed json — no cext involved).
+  SMOKE_STAGE="$WORK/smoke-stage"
+  mkdir -p "$SMOKE_STAGE/app/bin" "$SMOKE_STAGE/__tpkg__"
+  cat > "$SMOKE_STAGE/app/bin/hello" <<'RUBY'
+puts "hello from #{RUBY_ENGINE} #{RUBY_VERSION}"
+require "json"
+puts JSON.generate({ok: true, engine: RUBY_ENGINE})
+RUBY
+  chmod 755 "$SMOKE_STAGE/app/bin/hello"
+  cat > "$SMOKE_STAGE/__tpkg__/manifest.yaml" <<YAML
+identity:
+  schema_version: 1
+  kind: app
+  name: rbcsmoke
+  version: "0.1.0"
+  producer: {tool: feedstock-build, tool_version: "1"}
+  created: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  digest:
+    tree_hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    blob_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  signing: {state: unsigned}
+  encryption: {state: none}
+provides:
+  entrypoints:
+    - name: rbcsmoke
+      path: /app/bin/hello
+      runtime_requirement: {engine: ruby, implementation: jruby, constraint: ">= 10, < 11"}
+  platforms: universal
+  capabilities: {exec: true, read: true}
+YAML
+  "$TFS_CLI" mkimage --format dwarfs "$SMOKE_STAGE" --output "$STORE/payloads/rbcsmoke/0.1.0.tfs"
+  chmod 444 "$STORE/payloads/rbcsmoke/0.1.0.tfs"
+  psha="$(sha256_of "$STORE/payloads/rbcsmoke/0.1.0.tfs")"
+  printf '%s  %s\n' "$psha" "0.1.0.tfs" > "$STORE/payloads/rbcsmoke/0.1.0.tfs.sha256"
+  cp "$SMOKE_STAGE/__tpkg__/manifest.yaml" "$STORE/payloads/rbcsmoke/0.1.0.manifest.yaml"
+  cp "$SHIM_BIN" "$STORE/shims/rbcsmoke" && chmod 755 "$STORE/shims/rbcsmoke"
+
+  out=$(env TEBAKO_HOME="$STORE" TEBAKO_OFFLINE=1 TEBAKO_RBCSMOKE_VERSION=0.1.0 \
+      TMPDIR="$WORK/tmp" \
+      "$STORE/shims/rbcsmoke" 2>&1) || { echo "::error::composed smoke failed: $out"; exit 1; }
+  echo "$out" | grep -v '^\[tebako\]' | head -3
+  echo "$out" | grep -q '"engine":"jruby"' || {
+    echo "::error::composed smoke did not run on jruby: $out"; exit 1; }
+  echo "composed smoke OK (shim → jruby → temurin owner, json default gem loaded)"
+
+  # The cext NEGATIVE cell (TODO.jruby/02's acceptance): a payload whose
+  # runtime_requirement declares a native-extension abi must fail AT
+  # DISPATCH with the resolver's named abi-mismatch error (the jruby
+  # shard's abi:"none" sentinel can never equal a real platform string) —
+  # never match and crash late.
+  step "cext negative smoke (native-abi payload → named dispatch error)"
+  cext_stage="$WORK/cext-stage"
+  mkdir -p "$cext_stage/app/bin" "$cext_stage/__tpkg__"
+  cat > "$cext_stage/app/bin/cextapp" <<'RUBY'
+puts "must never print"
+RUBY
+  chmod 755 "$cext_stage/app/bin/cextapp"
+  sed -e 's/name: rbcsmoke/name: cextapp/' \
+      -e 's/path: \/app\/bin\/hello/path: \/app\/bin\/cextapp/' \
+      -e 's/constraint: ">= 10, < 11"}/constraint: ">= 10, < 11", abi: arm64-darwin-23}/' \
+      "$SMOKE_STAGE/__tpkg__/manifest.yaml" > "$cext_stage/__tpkg__/manifest.yaml"
+  mkdir -p "$STORE/payloads/cextapp"
+  "$TFS_CLI" mkimage --format dwarfs "$cext_stage" --output "$STORE/payloads/cextapp/0.1.0.tfs"
+  chmod 444 "$STORE/payloads/cextapp/0.1.0.tfs"
+  csha="$(sha256_of "$STORE/payloads/cextapp/0.1.0.tfs")"
+  printf '%s  %s\n' "$csha" "0.1.0.tfs" > "$STORE/payloads/cextapp/0.1.0.tfs.sha256"
+  cp "$cext_stage/__tpkg__/manifest.yaml" "$STORE/payloads/cextapp/0.1.0.manifest.yaml"
+  cp "$SHIM_BIN" "$STORE/shims/cextapp" && chmod 755 "$STORE/shims/cextapp"
+  set +e
+  cout=$(env TEBAKO_HOME="$STORE" TEBAKO_OFFLINE=1 TEBAKO_CEXTAPP_VERSION=0.1.0 \
+      TMPDIR="$WORK/tmp" \
+      "$STORE/shims/cextapp" 2>&1)
+  crc=$?
+  set -e
+  echo "$cout" | head -5
+  [ "$crc" != 0 ] || { echo "::error::cext payload booted on jruby — the abi sentinel failed"; exit 1; }
+  case "$cout" in
+    *must\ never\ print*) echo "::error::the cext payload EXECUTED on jruby"; exit 1 ;;
+  esac
+  echo "cext negative smoke OK (named dispatch failure, exit $crc — never a boot)"
+fi

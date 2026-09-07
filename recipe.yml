@@ -1,0 +1,159 @@
+# Feedstock recipe for jruby
+# spec 13 §9 + docs/conventions.md in tebako-packages/index
+name: "jruby"
+kind: runtime
+summary: "JRuby — the tebako ruby:jruby RUNTIME (spec 33 runtime-on-runtime): a UNIVERSAL env image composed on the java owner pair (tebako-packages/openjdk) at dispatch"
+
+# ONE flavor: `jvm` — the only mode jruby has (there is no native jruby
+# process; the JVM is always the process owner). The flavor shape rides
+# the spec 28 §8 machinery unchanged (the mode is a NON-axis: the
+# selector is ruby:jruby).
+#
+# The dist is UNIVERSAL (probe record TODO.jruby/02-probe-2026-09-07):
+# jruby-dist is bytecode + the ruby home, and lib/jni/ ships every
+# platform's jffi stub (~26 platforms incl. arch-unsuffixed Darwin) — the
+# archive has NO per-platform variants. So the env image is built ONCE
+# (the universal asset) and the triplet binding comes entirely from the
+# composed java OWNER pair. The release still ships the per-triplet
+# wrapper exe (the 2.5.0 launcher, byte-identical to tamatebako/tebako's
+# own asset — it anchors the store entry's well-formedness and the
+# spec 33 §5 standalone fail-closed smoke; it is never the composed
+# process's owner) and a PER-TRIPLET release shard whose image.filename
+# names the universal asset — tpkg::runtime_store::entry_asset_names
+# flows that filename verbatim, so no tebako product change is needed
+# (verified against v2.5.0 sources 2026-09-07).
+flavors:
+  jvm:
+    implementation: "jruby"
+    # language_version ("4.0" — jruby 10.1.1.0 IS ruby 4.0.0, probed
+    # 2026-09-07: `java -jar lib/jruby.jar -v` prints
+    # "jruby 10.1.1.0 (4.0.0)") rides here as the feedstock SSOT; the
+    # shipped tpkg model has no EngineProvides.language_version field and
+    # mkimage re-serializes through the model — the key lands in the
+    # manifest when the model grows it (axis-polish batch item).
+    language_version: "4.0"
+    abi_line: "10.1"               # the jruby line; jruby runs NO native extensions (see the shard's abi sentinel below)
+    interpreter_api_version: "10.1"  # layout.yaml's declared line (no interpreter grant — spec 33 §5)
+    # The platform coverage this UNIVERSAL image declares (the L1
+    # manifest's one-or-many provides list, the workflow's pair-leg
+    # matrix, and the registry's platform rows all mirror THIS list — the
+    # recipe is the SSOT). windows-ucrt64 is a named follow-up (the
+    # universal image already serves it; the row lands with its CI leg).
+    platforms: [aarch64-macos, x86_64-linux-gnu]
+    # The declared spawn surface (spec 30 §2) — TODO.jruby/02's named
+    # entrypoints. The entry DISPATCH composes the owner java +
+    # argv_template (below); the bin/ scripts are never exec'd (they are
+    # host shell — the composition's process is the owner's JVM).
+    entrypoints: [jruby, jgem, jirb]
+    on_runtime:
+      engine: "java"
+      # NO implementation key: the default temurin flavor is a legal
+      # owner (unlike truffleruby-jvm, which needs the graalvm compiler —
+      # jruby brings its own JIT). A graalvm owner is legal too (the
+      # spec 28 §8 any_of spelling lands with the axis-polish batch; the
+      # bare engine edge already means "any java implementation").
+      constraint: ">= 21"          # Build-Jdk-Spec: 21 in lib/jruby.jar's manifest (probed)
+      mount: "/__runners__/jruby"
+    # The compose template: the whole runtime is lib/jruby.jar
+    # (Main-Class: org.jruby.main.Main — probed). -Djruby.home is
+    # LOAD-BEARING (probed 2026-09-07): `-jar` alone boots but RubyGems
+    # and the default gems never load ("`RubyGems' were not loaded" /
+    # LoadError on `require "json"`); the explicit home token wires the
+    # gem paths to the materialized tree. All tokens space-free (the
+    # quoted-flow grammar tools/build parses).
+    argv_template: ["-Djruby.home={mount}", "-jar", "{mount}/lib/jruby.jar"]
+    upstream:
+      # JRuby 10.1.1.0 (2026-07-22), Maven Central dist. Upstream
+      # publishes .sha256 sidecars — the pins below ARE upstream's (the
+      # two-anchor rule: the fetch step cross-checks against the sidecar
+      # URL, not just the recipe). strip_components 1 (the archive nests
+      # jruby-<ver>/). ONE universal source — every leg images the same
+      # tree.
+      version: "10.1.1.0"
+      tag: "10.1.1.0"              # the maven version (the release-index provenance)
+      sources:
+        - platform: "universal"
+          url: "https://repo1.maven.org/maven2/org/jruby/jruby-dist/10.1.1.0/jruby-dist-10.1.1.0-bin.tar.gz"
+          sha256: "1e08bff6a7f0134a4774fba37d8cf88b9dd4a7317bd49fca5af696a327450148"
+          strip_components: 1
+    # The composed smoke's owner pair: the PUBLISHED temurin java runtime
+    # (tebako-packages/openjdk v2.5.0 — the 2.5.0 line is REQUIRED:
+    # tebako#552 — a pre-2.5.0 owner exe predates spec 33 §1's entry
+    # routing and misroutes the composed entry; the exe digests below
+    # equal tamatebako/tebako's own 2.5.0 launcher monolith entries — the
+    # pair's exe IS the launcher, byte-identical). owner_smoke sits AFTER
+    # upstream on purpose: tools/build's indentation-anchored reader takes
+    # the first 6-space `version:` in the flavor, which must be the
+    # upstream's (the truffleruby 2026-09-07 local gate caught
+    # owner_smoke.version shadowing it).
+    owner_smoke:
+      repo: "tebako-packages/openjdk"
+      release: "v2.5.0"
+      version: "21.0.12"
+      tebako: "2.5.0"
+      exe_sha256:
+        macos-arm64: "b4725da9e99425acbda3d189738f78773b7658d63c015cf03ef4e2f035e94d28"
+        linux-gnu-x86_64: "02272c8ece40c5cfadc9cb77330d68f120b8eddd8ec3b8d2360ef56450d1f245"
+      image_sha256:
+        macos-arm64: "d4e30fafb532ee3f9192a8bc711e2b05d463bc3b2eb2be2b90393a6910b61882"
+        linux-gnu-x86_64: "70fbf7a1aa7b32d0a208f451472ce72737cf535d8949e83eb42862e59c001c35"
+
+build:
+  system: repack          # no compilation: unpack, prune, image
+  deps: []
+
+# The runtime contract (spec 28 revised §8 + spec 29 + spec 33).
+# tools/build renders manifests/runtime.yaml (tier-1, embedded at
+# /__tpkg__/manifest.yaml) and manifests/layout.yaml (the pair contract,
+# /lib/tebako/layout.yaml) from this block + the flavor block.
+runtime:
+  engine: "ruby"
+  contract_version: 2              # the spec 17 driver contract the wrapper speaks
+  interpreter: "/bin/jruby"        # the staged-tree existence check + the smoke's entry NAME (the layout grants NO interpreter — spec 33 §5)
+  smoke_args: "-v"                 # the standalone negative smoke's arg
+  # spec 29 §3: the owner reads the MATERIALIZED home (the argv template's
+  # {mount} is a host path per spec 33 §2's bridge law) — exec-cache
+  # materializes the tree whole (the java_home annotation is the
+  # trigger); a JVM needs no VFS once its home is materialized.
+  visibility: "exec-cache"
+  mount_root_override: false       # closed default — nothing in the composed JVM follows TEBAKO_MOUNT_ROOT (spec 00 §9)
+  # The tebako product line the pair builds against. jruby has ONE line:
+  # 2.5.0 is the FIRST spec-33-capable launcher (the owner-exe finding —
+  # tebako#552); there is no older line to keep. wrapper_sha256 digests
+  # are the v2.5.0 release's monolith SHA256SUMS entries (fetched
+  # 2026-09-07).
+  wrapper_tebako: "2.5.0"
+  wrapper_sha256:
+    macos-arm64: "b4725da9e99425acbda3d189738f78773b7658d63c015cf03ef4e2f035e94d28"
+    linux-gnu-x86_64: "02272c8ece40c5cfadc9cb77330d68f120b8eddd8ec3b8d2360ef56450d1f245"
+    windows-ucrt64: "6a69fa069f4f502791fd165b7b7795b59ac6b62690d00631d075abc29d7e1bcd"
+
+# Factory tools used by tools/build: the tfs CLI (the in-process imager)
+# and tebako-shim (the composed smoke's dispatcher) from the
+# tamatebako/tebako release. The digests are the v2.5.0 monolith
+# SHA256SUMS entries (fetched 2026-09-07); the fetch steps cross-check
+# against the monolith. v2.5.0 is REQUIRED: tfs mkimage re-serializes the
+# embedded manifest THROUGH the tpkg model, and only the 2.5.0 model
+# round-trips on_runtime + the widened requires grammar (the 2.4.0 CLI
+# would silently strip the owner edge). (link-unit rides the pin shape
+# for the day a leg needs the preload grant; the jvm layout declares none
+# — spec 33 §5.)
+tools:
+  repo: "tamatebako/tebako"
+  release: "v2.5.0"
+  sha256:
+    tfs:
+      macos-arm64: "0e1f84c1259c3e290c68c329fa763a0bf9f6665efb321e24175013e249061b35"
+      linux-gnu-x86_64: "205b44d9eca7d327215ac0ae394fb74b310581836b56ee080999b873abe49787"
+      windows-ucrt64: "06f0d667ef3ecbf8ad717215872570901cfe31f9b6f68c7fca3fcfb975e6c32d"
+    tebako-shim:
+      macos-arm64: "ad6a88373abc721c7d7e5e6f482d3fd6af2e99e0117ddcfdf7529e77eb090139"
+      linux-gnu-x86_64: "991a66026944b3b5db88278a1f691ed91b85a0a04bd588b30831ed23312724da"
+      windows-ucrt64: "86727f043dd0cfac76ee074669a3a1fab5732f865fa70b3189f12f72f92c71d4"
+
+image:
+  format: dwarfs
+  # .tfs everywhere (the tebako fs image — DwarFS-T format; normal dwarfs
+  # readers cannot read it)
+  extension:
+    default: tfs
