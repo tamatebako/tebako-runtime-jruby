@@ -14,7 +14,7 @@ schema_version: 1
 # mirrors resolution fields only): it lives in the release shard (the
 # shim's plan-time read) and the in-image manifest (the authority).
 # Platform matrix: temurin owner coverage is the constraint
-# (tamatebako/openjdk v2.5.0 ships macos-arm64 + linux-gnu-x86_64 +
+# (tamatebako/tebako-runtime-openjdk v2.5.0 ships macos-arm64 + linux-gnu-x86_64 +
 # windows-ucrt64). This first release declares the two POSIX rows the
 # acceptance gate covers (TODO.jruby/02); windows-ucrt64 is a named
 # follow-up (the universal image already serves it — the row lands with
@@ -33,5 +33,5 @@ payloads:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
     release:
-      ref: tfs:github:tamatebako/jruby:@@TAG@@
+      ref: tfs:github:tamatebako/tebako-runtime-jruby:@@TAG@@
   default: '@@VERSION@@'

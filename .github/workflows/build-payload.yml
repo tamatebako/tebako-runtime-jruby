@@ -214,19 +214,19 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ github.ref_name }}"
-          gh release create "$tag" --repo tamatebako/jruby \
+          gh release create "$tag" --repo tamatebako/tebako-runtime-jruby \
             --title "$tag — tebako-runtime jruby (JRuby $PKG_VERSION, universal image on the java owner)" \
             --notes "tebako ruby:jruby runtime (spec 33 on_runtime): ONE universal env image + the per-triplet wrapper exe; manifest.json is the release index, SHA256SUMS.txt the trust anchor." \
-            || gh release view "$tag" --repo tamatebako/jruby > /dev/null
+            || gh release view "$tag" --repo tamatebako/tebako-runtime-jruby > /dev/null
           # The universal image + its sidecar (the image leg's artifact).
-          gh release upload --clobber "$tag" --repo tamatebako/jruby \
+          gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby \
             "out/image/$RUNTIME_IMAGE_STEM.tfs" "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256"
           # Per-triplet: the exe + sidecar + shard (never the sibling
           # payload-*.yaml).
           for shard in out/pair-*/tebako-runtime-*.manifest.json; do
             dir="$(dirname "$shard")"
             stem="$(basename "$shard" .manifest.json)"
-            gh release upload --clobber "$tag" --repo tamatebako/jruby "$dir/$stem" "$dir/$stem.sha256" "$shard"
+            gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby "$dir/$stem" "$dir/$stem.sha256" "$shard"
           done
       - name: Derive + upload the monoliths (manifest.json + SHA256SUMS.txt)
         shell: bash
@@ -236,7 +236,7 @@ jobs:
           ruby -rjson -e 'puts JSON.pretty_generate(ARGV.sort.map { |f| JSON.parse(File.read(f)) })' \
             out/pair-*/tebako-runtime-*.manifest.json > manifest.json
           cat out/pair-*/tebako-runtime-*.sha256 "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256" > SHA256SUMS.txt
-          gh release upload --clobber "$tag" --repo tamatebako/jruby manifest.json SHA256SUMS.txt
+          gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby manifest.json SHA256SUMS.txt
       # The registry mirrors resolution fields only (L3): the env image
       # is the named artifact per platform — the SAME universal asset
       # under every platform key (TODO.jruby/02 item 4's pinned
