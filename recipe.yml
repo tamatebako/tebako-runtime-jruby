@@ -2,7 +2,7 @@
 # spec 13 §9 + docs/conventions.md in tebako-packages/index
 name: "jruby"
 kind: runtime
-summary: "JRuby — the tebako ruby:jruby RUNTIME (spec 33 runtime-on-runtime): a UNIVERSAL env image composed on the java owner pair (tebako-packages/openjdk) at dispatch"
+summary: "JRuby — the tebako ruby:jruby RUNTIME (spec 33 runtime-on-runtime): a UNIVERSAL env image composed on the java owner pair (tamatebako/openjdk) at dispatch"
 
 # ONE flavor: `jvm` — the only mode jruby has (there is no native jruby
 # process; the JVM is always the process owner). The flavor shape rides
@@ -77,7 +77,7 @@ flavors:
           sha256: "1e08bff6a7f0134a4774fba37d8cf88b9dd4a7317bd49fca5af696a327450148"
           strip_components: 1
     # The composed smoke's owner pair: the PUBLISHED temurin java runtime
-    # (tebako-packages/openjdk v2.5.0 — the 2.5.0 line is REQUIRED:
+    # (tamatebako/openjdk v2.5.0 — the 2.5.0 line is REQUIRED:
     # tebako#552 — a pre-2.5.0 owner exe predates spec 33 §1's entry
     # routing and misroutes the composed entry; the exe digests below
     # equal tamatebako/tebako's own 2.5.0 launcher monolith entries — the
@@ -87,7 +87,7 @@ flavors:
     # upstream's (the truffleruby 2026-09-07 local gate caught
     # owner_smoke.version shadowing it).
     owner_smoke:
-      repo: "tebako-packages/openjdk"
+      repo: "tamatebako/openjdk"
       release: "v2.5.0"
       version: "21.0.12"
       tebako: "2.5.0"
