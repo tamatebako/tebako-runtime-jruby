@@ -430,6 +430,8 @@ else
   img_sha="$want_img_sha"
   echo "image: $IMG (sha256 verified against the image leg's sidecar)"
 
+  # capabilities: display metadata (the versions catalog's chip axis),
+  # never a selector axis — jruby's JIT is off-by-default, nothing to advertise.
   step "the release shard (<stem>.manifest.json — image.filename = the UNIVERSAL asset)"
   ARCHIVE_NAME="$(basename "$URL")"
   RELEASE_REF="${GITHUB_REF_NAME:-local}"
@@ -450,8 +452,6 @@ else
   "ruby_version": "$VERSION",
   "implementation": "$IMPLEMENTATION",
   "platform": "$ASSET_PLATFORM",
-  # Display metadata (the versions catalog's chip axis), never a selector
-  # axis: jruby's JIT is off-by-default — nothing to advertise.
   "capabilities": [],
   "abi": "none",
   "filename": "$STEM",
