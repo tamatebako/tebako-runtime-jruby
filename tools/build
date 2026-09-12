@@ -450,6 +450,9 @@ else
   "ruby_version": "$VERSION",
   "implementation": "$IMPLEMENTATION",
   "platform": "$ASSET_PLATFORM",
+  # Display metadata (the versions catalog's chip axis), never a selector
+  # axis: jruby's JIT is off-by-default — nothing to advertise.
+  "capabilities": [],
   "abi": "none",
   "filename": "$STEM",
   "sha256": "$exe_sha",
