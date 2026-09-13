@@ -6,9 +6,8 @@ Repack feedstock (no compilation): the JRuby dist is a **universal** tarball
 triplet binding comes from the composed **java owner** pair
 (tamatebako/tebako-runtime-openjdk — `DEPENDS java >= 21`, spec 33's `on_runtime` form).
 
-- TODO thread: `TODO.jruby/02` at the ecosystem root; probe facts:
-  `TODO.jruby/02-probe-2026-09-07.md`.
-- Spec: docs/spec/33 (runtime-on-runtime) in tamatebako/tebako; the jvm-mode
-  machinery mirrors tamatebako/tebako-runtime-truffleruby's `flavors.jvm` (its /03 PR).
-- Owner line floor: **2.5.0** (tebako#552 — a pre-2.5.0 owner misroutes the
-  composed entry).
+- Spec: [docs/spec/33](https://github.com/tamatebako/tebako/blob/main/docs/spec/33-runtime-on-runtime.md)
+  (runtime-on-runtime); the jvm-mode machinery mirrors
+  tamatebako/tebako-runtime-truffleruby's `flavors.jvm`.
+- Owner line floor: **2.5.0** ([tamatebako/tebako#552](https://github.com/tamatebako/tebako/pull/552)
+  — a pre-2.5.0 owner misroutes the composed entry).
