@@ -12,8 +12,7 @@ name: build-payload
 # it verbatim, no product change). The pair legs' smokes: the spec 33 §5
 # standalone fail-closed gate (exit 65) + the COMPOSED wire (shim → jruby
 # → temurin owner) + the cext negative cell (a native-abi payload fails
-# by name at dispatch — the shard's abi:"none" sentinel; TODO.jruby/02's
-# acceptance). The publish job uploads all of it, derives the monoliths
+# by name at dispatch — the shard's abi:"none" sentinel). The publish job uploads all of it, derives the monoliths
 # (manifest.json + SHA256SUMS.txt, trr#140) from the shards + sidecars,
 # renders the registry entry from manifests/registry.yaml, and lands it
 # by bot PR. `tebako publish` is NOT used: the CLI refuses kind: runtime.
@@ -239,8 +238,8 @@ jobs:
           gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby manifest.json SHA256SUMS.txt
       # The registry mirrors resolution fields only (L3): the env image
       # is the named artifact per platform — the SAME universal asset
-      # under every platform key (TODO.jruby/02 item 4's pinned
-      # consequence); kind: runtime carries NO entrypoints key.
+      # under every platform key (a consequence of the pinned universal
+      # image); kind: runtime carries NO entrypoints key.
       - name: Render the registry entry
         shell: bash
         run: |

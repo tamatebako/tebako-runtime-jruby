@@ -442,8 +442,7 @@ else
   # extensions, and a native-extension payload (whose runtime_requirement
   # declares the ruby platform string as abi) must fail AT DISPATCH with
   # the resolver's named abi-mismatch error — never match through the
-  # absent-field compat window and crash late (TODO.jruby/02's
-  # acceptance). The MRI line's real abi strings never equal "none".
+  # absent-field compat window and crash late. The MRI line's real abi strings never equal "none".
   cat > "$OUT/$STEM.manifest.json" <<EOF
 {
   "tebako_version": "$WRAPPER_TEBAKO",
@@ -590,7 +589,7 @@ YAML
     echo "::error::composed smoke did not run on jruby: $out"; exit 1; }
   echo "composed smoke OK (shim → jruby → temurin owner, json default gem loaded)"
 
-  # The cext NEGATIVE cell (TODO.jruby/02's acceptance): a payload whose
+  # The cext NEGATIVE cell: a payload whose
   # runtime_requirement declares a native-extension abi must fail AT
   # DISPATCH with the resolver's named abi-mismatch error (the jruby
   # shard's abi:"none" sentinel can never equal a real platform string) —
