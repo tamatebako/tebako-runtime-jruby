@@ -7,7 +7,7 @@ schema_version: 1
 # AUTHORITY (the release shard mirrors it for the shim's plan-time read;
 # the driver cross-checks). Filled from recipe.yml's flavors.jvm block by
 # tools/build; every fact below is the 2026-09-07 probe's
-# (TODO.jruby/02-probe-2026-09-07.md), never re-derived.
+# record, never re-derived.
 identity:
   schema_version: 1
   kind: runtime
