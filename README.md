@@ -2,7 +2,7 @@
 
 Repack feedstock (no compilation): the JRuby dist is a **universal** tarball
 (bytecode + ruby home; `lib/jni/` ships every platform's jffi stub — see
-`recipe.yml`'s probe record), so ONE env image serves all triplets; the
+`Tebakofile`'s probe record), so ONE env image serves all triplets; the
 triplet binding comes from the composed **java owner** pair
 (tamatebako/tebako-runtime-openjdk — `DEPENDS java >= 21`, spec 33's `on_runtime` form).
 
