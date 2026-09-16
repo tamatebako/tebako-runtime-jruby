@@ -106,7 +106,7 @@ recipe_flavor_value() {
       print line
       exit
     }
-  ' "$FEEDSTOCK/recipe.yml"
+  ' "$FEEDSTOCK/Tebakofile"
 }
 recipe_value() {
   # the flavor's upstream scalar (version, tag) — 6-space; tolerates
@@ -122,7 +122,7 @@ recipe_value() {
       print line
       exit
     }
-  ' "$FEEDSTOCK/recipe.yml"
+  ' "$FEEDSTOCK/Tebakofile"
 }
 recipe_source_value() {
   # The ONE universal source (jruby ships no per-platform archives): the
@@ -135,7 +135,7 @@ recipe_source_value() {
       print
       exit
     }
-  ' "$FEEDSTOCK/recipe.yml"
+  ' "$FEEDSTOCK/Tebakofile"
 }
 # The runtime block's scalars (indented two under the top-level
 # `runtime:` key) — the SHARED contract keys. Quoted and unquoted values
@@ -154,7 +154,7 @@ recipe_runtime_value() {
       print line
       exit
     }
-  ' "$FEEDSTOCK/recipe.yml"
+  ' "$FEEDSTOCK/Tebakofile"
 }
 # The flavor's on_runtime sub-scalars (6-space under the 4-space
 # on_runtime: key — spec 33 §2's owner edge) and the raw (unstripped)
@@ -175,7 +175,7 @@ recipe_onruntime_value() {
       print line
       exit
     }
-  ' "$FEEDSTOCK/recipe.yml"
+  ' "$FEEDSTOCK/Tebakofile"
 }
 recipe_flavor_raw() {
   awk -v flavor="$FLAVOR" -v key="$1" "$_flavor_scope"'
@@ -187,7 +187,7 @@ recipe_flavor_raw() {
       print line
       exit
     }
-  ' "$FEEDSTOCK/recipe.yml"
+  ' "$FEEDSTOCK/Tebakofile"
 }
 
 VERSION="$(recipe_value version)"
@@ -196,7 +196,7 @@ URL="$(recipe_source_value url)"
 SHA256="$(recipe_source_value sha256)"
 STRIP="$(recipe_source_value strip_components)"
 [ -n "$VERSION" ] && [ -n "$TAG" ] && [ -n "$URL" ] && [ -n "$SHA256" ] && [ -n "$STRIP" ] || {
-  echo "recipe.yml flavors.$FLAVOR upstream version/tag or the universal sources entry unreadable (unknown FLAVOR?)"; exit 1; }
+  echo "Tebakofile flavors.$FLAVOR upstream version/tag or the universal sources entry unreadable (unknown FLAVOR?)"; exit 1; }
 
 ENGINE="$(recipe_runtime_value engine)"
 IMPLEMENTATION="$(recipe_flavor_value implementation)"
@@ -218,16 +218,16 @@ ON_CONSTRAINT="$(recipe_onruntime_value constraint)"
 ON_MOUNT="$(recipe_onruntime_value mount)"
 for v in ENGINE IMPLEMENTATION ABI_LINE API_VERSION INTERPRETER WRAPPER_TEBAKO SMOKE_ARGS ON_ENGINE ON_CONSTRAINT ON_MOUNT; do
   eval "val=\$$v"
-  [ -n "$val" ] || { echo "recipe.yml runtime/flavors.$FLAVOR .${v} unreadable (or empty)"; exit 1; }
+  [ -n "$val" ] || { echo "Tebakofile runtime/flavors.$FLAVOR .${v} unreadable (or empty)"; exit 1; }
 done
-[ -n "$ENTRYPOINTS" ] || { echo "recipe.yml flavors.$FLAVOR.entrypoints unreadable (or empty)"; exit 1; }
-[ -n "$COVERAGE" ] || { echo "recipe.yml flavors.$FLAVOR.platforms (the coverage list) unreadable (or empty)"; exit 1; }
+[ -n "$ENTRYPOINTS" ] || { echo "Tebakofile flavors.$FLAVOR.entrypoints unreadable (or empty)"; exit 1; }
+[ -n "$COVERAGE" ] || { echo "Tebakofile flavors.$FLAVOR.platforms (the coverage list) unreadable (or empty)"; exit 1; }
 INT_NAME="$(basename "$INTERPRETER")"
 
 # The compose template: one quoted, space-free token per element; strip
 # the flow brackets, split on '", "' boundaries.
 ARGV_TOKENS="$(recipe_flavor_raw argv_template | sed -E 's/^\[//; s/\][ \t]*$//; s/^"//; s/"$//; s/", *"/\n/g')"
-[ -n "$ARGV_TOKENS" ] || { echo "recipe.yml flavors.$FLAVOR.argv_template unreadable (or empty)"; exit 1; }
+[ -n "$ARGV_TOKENS" ] || { echo "Tebakofile flavors.$FLAVOR.argv_template unreadable (or empty)"; exit 1; }
 ARGV_YAML=""
 while IFS= read -r tok; do
   ARGV_YAML="$ARGV_YAML      - \"$tok\"

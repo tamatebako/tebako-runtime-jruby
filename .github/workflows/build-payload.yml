@@ -18,7 +18,7 @@ name: build-payload
 # by bot PR. `tebako publish` is NOT used: the CLI refuses kind: runtime.
 #
 # PIN DISCIPLINE (the owner's rule): this workflow carries NO version or
-# digest literals. recipe.yml is the SSOT — the `tools:` block pins the
+# digest literals. Tebakofile is the SSOT — the `tools:` block pins the
 # tfs CLI + tebako-shim (release + per-platform sha256, cross-checked
 # against the release's own SHA256SUMS), the `runtime:` block pins the
 # wrapper's product line, flavors.jvm.owner_smoke pins the published
@@ -48,10 +48,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Read the toolchain pins (recipe.yml is the SSOT)
+      - name: Read the toolchain pins (Tebakofile is the SSOT)
         shell: bash
         run: ruby tools/pins.rb linux-gnu-x86_64 jvm --env >> "$GITHUB_ENV"
-      - name: Fetch the imager (pinned by recipe.yml, sha256-verified)
+      - name: Fetch the imager (pinned by Tebakofile, sha256-verified)
         shell: bash
         env:
           TFS_BIN: .packager/tfs
@@ -64,7 +64,7 @@ jobs:
           echo "$TFS_SHA256  $TFS_BIN" | sha256sum -c -
           # The pin must agree with the release's own sums (both anchored).
           got=$(awk -v a="$TFS_ASSET" '$2 == a {print $1}' SHA256SUMS)
-          [ "$got" = "$TFS_SHA256" ] || { echo "::error::pin mismatch for $TFS_ASSET: recipe.yml=$TFS_SHA256 release=${got:-ABSENT}"; exit 1; }
+          [ "$got" = "$TFS_SHA256" ] || { echo "::error::pin mismatch for $TFS_ASSET: Tebakofile=$TFS_SHA256 release=${got:-ABSENT}"; exit 1; }
           chmod +x "$TFS_BIN"
           "$TFS_BIN" > /dev/null
       - name: Build the universal env image
@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Identity only. The matrix MIRRORS recipe.yml's
+        # Identity only. The matrix MIRRORS Tebakofile's
         # flavors.jvm.platforms coverage (the recipe is the SSOT; the
         # registry rows name the same list). windows-ucrt64 is a named
         # follow-up (the universal image already serves it).
@@ -102,10 +102,10 @@ jobs:
             os: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Read the toolchain pins (recipe.yml is the SSOT)
+      - name: Read the toolchain pins (Tebakofile is the SSOT)
         shell: bash
         run: ruby tools/pins.rb "${{ matrix.platform.asset_platform }}" jvm --env >> "$GITHUB_ENV"
-      - name: Fetch the imager (pinned by recipe.yml, sha256-verified)
+      - name: Fetch the imager (pinned by Tebakofile, sha256-verified)
         shell: bash
         env:
           TFS_BIN: .packager/tfs
@@ -117,10 +117,10 @@ jobs:
           curl -sL --fail -o SHA256SUMS "$base/SHA256SUMS"
           echo "$TFS_SHA256  $TFS_BIN" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }
           got=$(awk -v a="$TFS_ASSET" '$2 == a {print $1}' SHA256SUMS)
-          [ "$got" = "$TFS_SHA256" ] || { echo "::error::pin mismatch for $TFS_ASSET: recipe.yml=$TFS_SHA256 release=${got:-ABSENT}"; exit 1; }
+          [ "$got" = "$TFS_SHA256" ] || { echo "::error::pin mismatch for $TFS_ASSET: Tebakofile=$TFS_SHA256 release=${got:-ABSENT}"; exit 1; }
           chmod +x "$TFS_BIN"
           "$TFS_BIN" > /dev/null
-      - name: Fetch the wrapper (pinned by recipe.yml)
+      - name: Fetch the wrapper (pinned by Tebakofile)
         shell: bash
         env:
           WRAPPER_BIN: .packager/tebako-runtime-launcher
@@ -135,7 +135,7 @@ jobs:
       # The dispatcher for the composed smoke (spec 33's real wire: shim
       # → dep runtime → owner runtime). Same two-anchor rule as the
       # imager.
-      - name: Fetch the dispatcher (tebako-shim, pinned by recipe.yml)
+      - name: Fetch the dispatcher (tebako-shim, pinned by Tebakofile)
         shell: bash
         run: |
           set -euo pipefail
@@ -145,7 +145,7 @@ jobs:
           curl -sL --fail -o SHA256SUMS "$base/SHA256SUMS"
           echo "$TEBAKO_SHIM_SHA256  .packager/tebako-shim" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }
           got=$(awk -v a="$TEBAKO_SHIM_ASSET" '$2 == a {print $1}' SHA256SUMS)
-          [ "$got" = "$TEBAKO_SHIM_SHA256" ] || { echo "::error::pin mismatch for $TEBAKO_SHIM_ASSET: recipe.yml=$TEBAKO_SHIM_SHA256 release=${got:-ABSENT}"; exit 1; }
+          [ "$got" = "$TEBAKO_SHIM_SHA256" ] || { echo "::error::pin mismatch for $TEBAKO_SHIM_ASSET: Tebakofile=$TEBAKO_SHIM_SHA256 release=${got:-ABSENT}"; exit 1; }
           chmod +x .packager/tebako-shim
           echo "SHIM_BIN=$PWD/.packager/tebako-shim" >> "$GITHUB_ENV"
       # The image leg's universal image (the pair leg never rebuilds it —
@@ -206,7 +206,7 @@ jobs:
       # product line (v<line>, the trr convention — the resolver's
       # {base}/v<tebako_version>/<asset> URL shape answers it). jruby has
       # ONE flavor on ONE line — a tag ships everything here.
-      - name: Read the toolchain pins (recipe.yml is the SSOT)
+      - name: Read the toolchain pins (Tebakofile is the SSOT)
         run: ruby tools/pins.rb macos-arm64 jvm --env >> "$GITHUB_ENV"
       - name: Create the release + upload the runtime pair assets
         shell: bash

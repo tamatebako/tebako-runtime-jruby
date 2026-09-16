@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# pins.rb — read recipe.yml's `tools:` block (the repo's toolchain pin
+# pins.rb — read Tebakofile's `tools:` block (the repo's toolchain pin
 # SSOT) and emit KEY=VALUE lines for $GITHUB_ENV. The workflow carries NO
 # version or digest literals — every value flows from the recipe.
 #
@@ -17,7 +17,7 @@
 # named error, never a guess (spec 00 §9).
 #
 # Runtime-promotion additions (the kind: runtime pair): the wrapper exe
-# pin flows from recipe.yml's runtime.wrapper_tebako (WRAPPER_RELEASE /
+# pin flows from Tebakofile's runtime.wrapper_tebako (WRAPPER_RELEASE /
 # WRAPPER_ASSET / RUNTIME_STEM_BASE) and the POSIX legs get PRELOAD_SHIM
 # (the extracted link-unit tarball's libtfs_preload path). The sha256
 # map is data-driven: every tool key under tools.sha256 emits
@@ -38,11 +38,11 @@ def die(msg)
 end
 
 root = File.expand_path("..", __dir__)
-recipe = YAML.load_file(File.join(root, "recipe.yml"))
+recipe = YAML.load_file(File.join(root, "Tebakofile"))
 tools = recipe.fetch("tools")
 release = tools.fetch("release")
 version = release.sub(/\Av/, "")
-die "recipe.yml tools.sha256 missing" unless tools["sha256"].is_a?(Hash)
+die "Tebakofile tools.sha256 missing" unless tools["sha256"].is_a?(Hash)
 
 # The flavor axis (spec 28 §8's shape): the flavor key names the recipe's
 # flavors:<flavor> block (jruby has exactly one — `jvm`, the default; the
@@ -58,10 +58,10 @@ flavor = if ARGV.include?("--release-only")
            positional[1] || ENV["FLAVOR"] || "jvm"
          end
 flavors = recipe.fetch("flavors") do
-  die "recipe.yml flavors block missing"
+  die "Tebakofile flavors block missing"
 end
 flavor_block = flavors[flavor] or
-  die "recipe.yml: unknown flavor '#{flavor}' (have: #{flavors.keys.join(', ')})"
+  die "Tebakofile: unknown flavor '#{flavor}' (have: #{flavors.keys.join(', ')})"
 
 runtime = recipe.fetch("runtime")
 # The wrapper pin is per-FLAVOR overridable (the jvm flavor requires the
@@ -71,7 +71,7 @@ runtime = recipe.fetch("runtime")
 wrapper_tebako = flavor_block["wrapper_tebako"] || runtime.fetch("wrapper_tebako")
 wrapper_shas = flavor_block["wrapper_sha256"] || runtime.fetch("wrapper_sha256")
 pkg_version = flavor_block.dig("upstream", "version") ||
-              die("recipe.yml flavors.#{flavor}.upstream.version missing")
+              die("Tebakofile flavors.#{flavor}.upstream.version missing")
 
 pairs = {
   "TEBAKO_RELEASE" => release,
@@ -93,7 +93,7 @@ unless ARGV.include?("--release-only")
   tools.fetch("sha256").each do |tool, shas|
     sha = shas[platform]
     if sha.nil?
-      die "recipe.yml: no tools.sha256.#{tool}.#{platform} pin" unless posix_only.include?(tool)
+      die "Tebakofile: no tools.sha256.#{tool}.#{platform} pin" unless posix_only.include?(tool)
       warn "pins.rb: #{tool} has no #{platform} pin (POSIX-only tool — skipped)"
       next
     end
@@ -113,7 +113,7 @@ unless ARGV.include?("--release-only")
   pairs["WRAPPER_RELEASE"] = "v#{wrapper_tebako}"
   pairs["WRAPPER_ASSET"] = "tebako-runtime-launcher-#{wrapper_tebako}-#{platform}#{exe}"
   pairs["WRAPPER_SHA256"] = wrapper_shas[platform] ||
-                            die("recipe.yml: no wrapper_sha256.#{platform} pin for flavor '#{flavor}'")
+                            die("Tebakofile: no wrapper_sha256.#{platform} pin for flavor '#{flavor}'")
   pairs["RUNTIME_STEM_BASE"] = "tebako-runtime-#{wrapper_tebako}-#{pkg_version}"
   pairs["RUNTIME_STEM"] = "#{pairs['RUNTIME_STEM_BASE']}-#{platform}"
   # The env image is UNIVERSAL (the dist ships every platform's jffi
@@ -144,9 +144,9 @@ unless ARGV.include?("--release-only")
     pairs["OWNER_STEM"] = "tebako-runtime-#{owner_line}-#{owner_version}-#{platform}"
     pairs["OWNER_STORE_ID"] = "java-#{owner_version}-#{owner_line}-#{platform}"
     pairs["OWNER_EXE_SHA256"] = owner.fetch("exe_sha256")[platform] ||
-                                die("recipe.yml: no owner_smoke.exe_sha256.#{platform} pin")
+                                die("Tebakofile: no owner_smoke.exe_sha256.#{platform} pin")
     pairs["OWNER_IMAGE_SHA256"] = owner.fetch("image_sha256")[platform] ||
-                                  die("recipe.yml: no owner_smoke.image_sha256.#{platform} pin")
+                                  die("Tebakofile: no owner_smoke.image_sha256.#{platform} pin")
     pairs["DEP_STORE_ID"] = "ruby-#{pkg_version}-#{wrapper_tebako}-#{platform}"
   end
 end

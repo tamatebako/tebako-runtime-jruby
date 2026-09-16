@@ -5,7 +5,7 @@ schema_version: 1
 # the triplet binding comes from the composed java owner pair), composed
 # ON a java owner at dispatch. The in-image on_runtime block is the
 # AUTHORITY (the release shard mirrors it for the shim's plan-time read;
-# the driver cross-checks). Filled from recipe.yml's flavors.jvm block by
+# the driver cross-checks). Filled from Tebakofile's flavors.jvm block by
 # tools/build; every fact below is the 2026-09-07 probe's
 # record, never re-derived.
 identity:
