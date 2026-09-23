@@ -217,15 +217,43 @@ jobs:
             --title "$tag — tebako-runtime jruby (JRuby $PKG_VERSION, universal image on the java owner)" \
             --notes "tebako ruby:jruby runtime (spec 33 on_runtime): ONE universal env image + the per-triplet wrapper exe; manifest.json is the release index, SHA256SUMS.txt the trust anchor." \
             || gh release view "$tag" --repo tamatebako/tebako-runtime-jruby > /dev/null
+
+          # Skip-if-current upload (tebako-runtime-ruby#189's wedge
+          # lesson, proven by probe 2026-09-23): a DELETED asset name
+          # 422-blocks re-uploads for hours, and bulk deletes wedge a
+          # whole release. Payload names are byte-immutable per name: an
+          # absent name uploads, a same-digest name skips, a
+          # different-bytes name is KEPT loudly (the remedy is
+          # `status: withdrawn` in the registry + the next patch line —
+          # never a delete).
+          asset_digest() { # $1=asset name → served sha256 or empty
+            gh api "repos/tamatebako/tebako-runtime-jruby/releases/tags/$tag" \
+              --jq ".assets[] | select(.name == \"$1\") | .digest" | sed 's/^sha256://'
+          }
+          upload_write_once() { # $1=local file
+            local file="$1" name want have
+            name="$(basename "$file")"
+            want="$(shasum -a 256 "$file" | cut -d' ' -f1)"
+            have="$(asset_digest "$name")"
+            if [ -z "$have" ]; then
+              gh release upload "$tag" --repo tamatebako/tebako-runtime-jruby "$file"
+            elif [ "$have" = "$want" ]; then
+              echo "$name is already current on the release — skipping"
+            else
+              echo "::warning::$name is already served with DIFFERENT bytes — keeping the served asset (byte-immutable per name; a bad asset's remedy is the registry's withdrawn mark + the next patch line)"
+            fi
+          }
           # The universal image + its sidecar (the image leg's artifact).
-          gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby \
-            "out/image/$RUNTIME_IMAGE_STEM.tfs" "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256"
+          upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs"
+          upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256"
           # Per-triplet: the exe + sidecar + shard (never the sibling
           # payload-*.yaml).
           for shard in out/pair-*/tebako-runtime-*.manifest.json; do
             dir="$(dirname "$shard")"
             stem="$(basename "$shard" .manifest.json)"
-            gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby "$dir/$stem" "$dir/$stem.sha256" "$shard"
+            upload_write_once "$dir/$stem"
+            upload_write_once "$dir/$stem.sha256"
+            upload_write_once "$shard"
           done
       - name: Derive + upload the monoliths (manifest.json + SHA256SUMS.txt)
         shell: bash
@@ -235,7 +263,20 @@ jobs:
           ruby -rjson -e 'puts JSON.pretty_generate(ARGV.sort.map { |f| JSON.parse(File.read(f)) })' \
             out/pair-*/tebako-runtime-*.manifest.json > manifest.json
           cat out/pair-*/tebako-runtime-*.sha256 "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256" > SHA256SUMS.txt
-          gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby manifest.json SHA256SUMS.txt
+          # The derived monoliths are metadata — pure functions of the
+          # served shards — so a drifted one is debris and replaces (a
+          # single-asset replace is the probe-proven safe case; the wedge
+          # is the BULK delete). Already-current skips.
+          for mono in manifest.json SHA256SUMS.txt; do
+            want="$(shasum -a 256 "$mono" | cut -d' ' -f1)"
+            have="$(gh api "repos/tamatebako/tebako-runtime-jruby/releases/tags/$tag" \
+              --jq ".assets[] | select(.name == \"$mono\") | .digest" | sed 's/^sha256://')"
+            if [ "$have" = "$want" ]; then
+              echo "$mono is already current on the release — skipping"
+            else
+              gh release upload --clobber "$tag" --repo tamatebako/tebako-runtime-jruby "$mono"
+            fi
+          done
       # The registry mirrors resolution fields only (L3): the env image
       # is the named artifact per platform — the SAME universal asset
       # under every platform key (a consequence of the pinned universal
