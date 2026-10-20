@@ -126,7 +126,7 @@ jobs:
     # tebako#686: same registry-only skip as the image leg; the
     # needs.image.result arm keeps today's implicit "the image
     # succeeded" dependency exact under an explicit if.
-    if: needs.image.result == 'success' && (github.event_name != 'pull_request' || needs.changes.outputs.registry_only != 'true')
+    if: ${{ always() && needs.image.result == 'success' && (github.event_name != 'pull_request' || needs.changes.outputs.registry_only != 'true') }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
       fail-fast: false
@@ -217,7 +217,7 @@ jobs:
 
   release:
     name: publish
-    if: startsWith(github.ref, 'refs/tags/')
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
     needs: [image, pair]
     # A job-level block REPLACES the workflow-level grant, so contents +
     # pull-requests are restated; attestations/id-token arm the SLSA L3
@@ -341,7 +341,7 @@ jobs:
       # never attested. Gated with the job (tag runs only — push/PR runs
       # never attest).
       - name: Stage the attestation subjects (the exact served names)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -354,7 +354,7 @@ jobs:
           done
           cp manifest.json SHA256SUMS.txt attest-staging/
       - name: Attest build provenance
-        if: startsWith(github.ref, 'refs/tags/')
+        if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: attest-staging/*
