@@ -96,15 +96,15 @@ flavors:
     # and tools/pins.rb's OWNER_STEM composes the segmented name from it.
     owner_smoke:
       repo: "tamatebako/tebako-runtime-openjdk"
-      release: "v2.8.21"
+      release: "v2.8.47"
       version: "21.0.12"
-      tebako: "2.8.21"
+      tebako: "2.8.47"
       exe_sha256:
-        macos-arm64: "2754c8985420a208f32ef277ca78c8c5f7e4a5aeac9a3e97c1420ece9b56edd8"
-        linux-gnu-x86_64: "2f2cf0ea2626179d3bad89198ffaae7e2f233d98f52227938f7935cbb660200f"
+        macos-arm64: "eeee3f7bff1f7b8bd3b17e624ab5856c4fb5d8edb446f79ab962b44bd5651704"
+        linux-gnu-x86_64: "7829d1a1f221aeca7bd79be40ebf3999563cbcff436f961b40bc08772ff06d1b"
       image_sha256:
-        macos-arm64: "3cee1e52a0ff8c75d2cd2137d0f8e651167ffa64bda97172b876daf6e7ffd7a8"
-        linux-gnu-x86_64: "0a42c191b7d5f364d31bad3a7b2f1c7b49cadc883491a5b2c0cf1475854a41e6"
+        macos-arm64: "e5a0c2d92fc8113d4a176f49b3612896f5368d60290cd0544a67eb264e39380e"
+        linux-gnu-x86_64: "ee03d7ac5e30e71650c645dbffdf71c1772279128aa65171d1ee8ab189804e1d"
 
 build:
   system: repack          # no compilation: unpack, prune, image
@@ -150,7 +150,7 @@ runtime:
 # layout declares none — spec 33 §5.)
 tools:
   repo: "tamatebako/tebako"
-  release: "v2.8.21"
+  release: "v2.8.47"
   sha256:
     tfs:
       macos-arm64: "38f4493c1a65d37ace603db171c23d9a4580bd6053e3a3007800fbcf7a494d83"
