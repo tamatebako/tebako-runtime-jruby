@@ -132,11 +132,11 @@ runtime:
   # min_runtime_tebako floor launcher (tebako#666). wrapper_sha256
   # digests are the v2.8.21 release's monolith SHA256SUMS entries
   # (fetched 2026-09-28).
-  wrapper_tebako: "2.8.21"
+  wrapper_tebako: "2.8.47"
   wrapper_sha256:
-    macos-arm64: "2754c8985420a208f32ef277ca78c8c5f7e4a5aeac9a3e97c1420ece9b56edd8"
-    linux-gnu-x86_64: "2f2cf0ea2626179d3bad89198ffaae7e2f233d98f52227938f7935cbb660200f"
-    windows-ucrt64: "82b554586faa2ff3e51a7ef545e373d65994c959f63cacd9f6bf5b0221b4fabc"
+    macos-arm64: "eeee3f7bff1f7b8bd3b17e624ab5856c4fb5d8edb446f79ab962b44bd5651704"
+    linux-gnu-x86_64: "7829d1a1f221aeca7bd79be40ebf3999563cbcff436f961b40bc08772ff06d1b"
+    windows-ucrt64: "4b65e5ae8da9035ece328a7ec308c5f6d567782aa69740169e2c735b071777a1"
 
 # Factory tools used by tools/build: the tfs CLI (the in-process imager)
 # and tebako-shim (the composed smoke's dispatcher) from the
@@ -153,9 +153,9 @@ tools:
   release: "v2.8.47"
   sha256:
     tfs:
-      macos-arm64: "38f4493c1a65d37ace603db171c23d9a4580bd6053e3a3007800fbcf7a494d83"
-      linux-gnu-x86_64: "8b752cb7bc8337960bf77f36cc375e6bc6f75b1d78e6d50c0000a33b26be51b9"
-      windows-ucrt64: "e5128ef8be90813bf9300dda39f204fff39f6d1e3eb4963128cbdfaeed88744a"
+      macos-arm64: "ac5237214f610f89089684aa0041fdbd43fa929c237a0d716e9fa1dc5bcfa0fe"
+      linux-gnu-x86_64: "f1ea8235e713d4335c7666c2c337de8cdf6790810f3820d34ad206d39c383977"
+      windows-ucrt64: "96bf0560079faeacdf6bef4eee323810e688c329b0705fa68a21c81d22988e89"
     tebako-shim:
       macos-arm64: "9390ac1fff96df43ac847e271a3ff854a53d5f02baad1f3674cc8596b36ff9e6"
       linux-gnu-x86_64: "f07b025832eaf9ba1c416e306d607791e2a90418a3174b62d4510a7eba9d1f91"
