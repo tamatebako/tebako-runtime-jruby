@@ -27,11 +27,11 @@ payloads:
     implementation: jruby
     platforms:
       aarch64-macos:
-        artifact: tebako-runtime-2.8.21-10.1.1.0-universal.tfs
-        sha256: '8c4042a18e651bc50966dde55ce23a11c7c981bc60e91cbcf82801499f9975fe'
+        artifact: tebako-runtime-2.8.47-jruby-10.1.1.0-universal.tfs
+        sha256: 'f391187f0356ba7faee342a3ef74cb2397c1518db1b54a178320b326c474dcfe'
       x86_64-linux-gnu:
-        artifact: tebako-runtime-2.8.21-10.1.1.0-universal.tfs
-        sha256: '8c4042a18e651bc50966dde55ce23a11c7c981bc60e91cbcf82801499f9975fe'
+        artifact: tebako-runtime-2.8.47-jruby-10.1.1.0-universal.tfs
+        sha256: 'f391187f0356ba7faee342a3ef74cb2397c1518db1b54a178320b326c474dcfe'
     release:
-      ref: tfs:github:tamatebako/tebako-runtime-jruby:v2.8.21
+      ref: tfs:github:tamatebako/tebako-runtime-jruby:v2.8.47
   default: '10.1.1.0'
