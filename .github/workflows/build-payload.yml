@@ -82,7 +82,7 @@ jobs:
     # non-PR event — never suppresses the legs, and neither does a
     # detection failure (a missing output reads as "not registry-only":
     # the safe default is to build).
-    if: github.event_name != 'pull_request' || needs.changes.outputs.registry_only != 'true'
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.outputs.registry_only != 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
