@@ -99,6 +99,7 @@ flavors:
       release: "v2.8.47"
       version: "21.0.12"
       tebako: "2.8.47"
+      implementation: "temurin"
       exe_sha256:
         macos-arm64: "eeee3f7bff1f7b8bd3b17e624ab5856c4fb5d8edb446f79ab962b44bd5651704"
         linux-gnu-x86_64: "7829d1a1f221aeca7bd79be40ebf3999563cbcff436f961b40bc08772ff06d1b"
