@@ -133,11 +133,11 @@ runtime:
   # min_runtime_tebako floor launcher (tebako#666). wrapper_sha256
   # digests are the v2.8.21 release's monolith SHA256SUMS entries
   # (fetched 2026-09-28).
-  wrapper_tebako: "2.8.47"
+  wrapper_tebako: "2.8.49"
   wrapper_sha256:
-    macos-arm64: "eeee3f7bff1f7b8bd3b17e624ab5856c4fb5d8edb446f79ab962b44bd5651704"
-    linux-gnu-x86_64: "7829d1a1f221aeca7bd79be40ebf3999563cbcff436f961b40bc08772ff06d1b"
-    windows-ucrt64: "4b65e5ae8da9035ece328a7ec308c5f6d567782aa69740169e2c735b071777a1"
+    macos-arm64: "e1da83755fd4513e8d9b6400910392093be4d3a00fd3d96bf8962de7d9158ee9"
+    linux-gnu-x86_64: "1457f49d4f6a6f2432cd4a7e475b42898812d7e53e5119a733a6433ddedb19da"
+    windows-ucrt64: "3b7416da7ccb4c022ad6b77c72ff65676aeb29f68d63e7e3a583666b378212ef"
 
 # Factory tools used by tools/build: the tfs CLI (the in-process imager)
 # and tebako-shim (the composed smoke's dispatcher) from the
@@ -151,16 +151,16 @@ runtime:
 # layout declares none — spec 33 §5.)
 tools:
   repo: "tamatebako/tebako"
-  release: "v2.8.47"
+  release: "v2.8.49"
   sha256:
     tfs:
-      macos-arm64: "ac5237214f610f89089684aa0041fdbd43fa929c237a0d716e9fa1dc5bcfa0fe"
-      linux-gnu-x86_64: "f1ea8235e713d4335c7666c2c337de8cdf6790810f3820d34ad206d39c383977"
-      windows-ucrt64: "96bf0560079faeacdf6bef4eee323810e688c329b0705fa68a21c81d22988e89"
+      macos-arm64: "ab69970e60a0e46257f48843cb8a7de982564baf864e4583ba2beafd3d6ead3f"
+      linux-gnu-x86_64: "58d58ba392190f57325d948a7c4c9fd05494b40f4f0f3c4b2c242dd15f6b12e3"
+      windows-ucrt64: "d932e153c204cea81dc3ef60e2ef5e5de98cfac70b57dd651386f9ed184f3df9"
     tebako-shim:
-      macos-arm64: "250e52f76cd16a5169fd98b4837b148f23138ab1d93330ce17d71c0d9a219602"
-      linux-gnu-x86_64: "8bf8320e7363af746e12d3b9f365ae35489553629326369abad30e65b2e88d43"
-      windows-ucrt64: "8b91172f2d3846bc107b84205a23f6dc5422356b9e3fe272df948fd84b39cffb"
+      macos-arm64: "3539806c05bd49d92b2f89765b2ffd8ea32568261f240350fa75a96ee99b5c57"
+      linux-gnu-x86_64: "7809932b3ca3cf69b2b76f19677ab60e7ef6040aff0898a100f97a608a794d24"
+      windows-ucrt64: "8780c35d9152ba005de651b99e2f0558d0a78cc58febfc2252e60562e7ec7964"
 
 image:
   format: limnifs
