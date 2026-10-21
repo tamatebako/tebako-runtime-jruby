@@ -131,8 +131,8 @@ runtime:
   # tebako#552); there is no older line to keep. v2.8.21 (2026-09-28)
   # moves the line to the 64 MiB limnifs inline-metadata ceiling +
   # min_runtime_tebako floor launcher (tebako#666). wrapper_sha256
-  # digests are the v2.8.21 release's monolith SHA256SUMS entries
-  # (fetched 2026-09-28).
+  # digests are the pinned line's own monolith SHA256SUMS entries
+  # (v2.8.49, fetched 2026-10-21).
   wrapper_tebako: "2.8.49"
   wrapper_sha256:
     macos-arm64: "e1da83755fd4513e8d9b6400910392093be4d3a00fd3d96bf8962de7d9158ee9"
@@ -141,9 +141,9 @@ runtime:
 
 # Factory tools used by tools/build: the tfs CLI (the in-process imager)
 # and tebako-shim (the composed smoke's dispatcher) from the
-# tamatebako/tebako release. The digests are the v2.8.21 monolith
-# SHA256SUMS entries (fetched 2026-09-28); the fetch steps cross-check
-# against the monolith. v2.5.0 is the model floor: tfs mkimage
+# tamatebako/tebako release. The digests are the pinned line's own
+# monolith SHA256SUMS entries (v2.8.49, fetched 2026-10-21); the fetch
+# steps cross-check against the monolith. v2.5.0 is the model floor: tfs mkimage
 # re-serializes the embedded manifest THROUGH the tpkg model, and only
 # the 2.5.0+ model round-trips on_runtime + the widened requires grammar
 # (the 2.4.0 CLI would silently strip the owner edge). (link-unit rides
