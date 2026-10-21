@@ -15,8 +15,9 @@ summary: "JRuby — the tebako ruby:jruby RUNTIME (spec 33 runtime-on-runtime): 
 # archive has NO per-platform variants. So the env image is built ONCE
 # (the universal asset) and the triplet binding comes entirely from the
 # composed java OWNER pair. The release still ships the per-triplet
-# wrapper exe (the 2.5.0 launcher, byte-identical to tamatebako/tebako's
-# own asset — it anchors the store entry's well-formedness and the
+# wrapper exe (the tebako-runtime-launcher of the pinned line,
+# byte-identical to tamatebako/tebako's own asset — it anchors the store
+# entry's well-formedness and the
 # spec 33 §5 standalone fail-closed smoke; it is never the composed
 # process's owner) and a PER-TRIPLET release shard whose image.filename
 # names the universal asset — tpkg::runtime_store::entry_asset_names
@@ -37,9 +38,13 @@ flavors:
     # The platform coverage this UNIVERSAL image declares (the L1
     # manifest's one-or-many provides list, the workflow's pair-leg
     # matrix, and the registry's platform rows all mirror THIS list — the
-    # recipe is the SSOT). windows-ucrt64 is a named follow-up (the
-    # universal image already serves it; the row lands with its CI leg).
-    platforms: [aarch64-macos, x86_64-linux-gnu]
+    # recipe is the SSOT). The full temurin owner coverage
+    # (tamatebako/tebako-runtime-openjdk v2.8.50 ships all eight temurin
+    # legs; graalvm CE ships no macos-x86_64 / windows-aarch64 upstream,
+    # and jruby's owner edge is the default temurin flavor, so temurin's
+    # surface is jruby's). The universal image serves every row — the
+    # triplet binding comes entirely from the composed java owner pair.
+    platforms: [aarch64-macos, x86_64-macos, x86_64-linux-gnu, aarch64-linux-gnu, x86_64-linux-musl, aarch64-linux-musl, x86_64-windows-ucrt, aarch64-windows-ucrt]
     # The declared spawn surface (spec 30 §2) — TODO.jruby/02's named
     # entrypoints. The entry DISPATCH composes the owner java +
     # argv_template (below); the bin/ scripts are never exec'd (they are
@@ -77,35 +82,51 @@ flavors:
           sha256: "1e08bff6a7f0134a4774fba37d8cf88b9dd4a7317bd49fca5af696a327450148"
           strip_components: 1
     # The composed smoke's owner pair: the PUBLISHED temurin java runtime
-    # (tamatebako/tebako-runtime-openjdk v2.8.21 — the 2.8.21 line pairs
-    # the spec-33 entry routing (tebako#552) with the 64 MiB limnifs
-    # inline-metadata ceiling this runtime's v2.8.21-written universal
-    # image needs: the 2.5.0 owner capped its driver at 1 MiB and mounted
-    # the image EINVAL. The exe digests below equal tamatebako/tebako's
-    # own 2.8.21 launcher monolith entries — the pair's exe IS the
-    # launcher, byte-identical). owner_smoke sits AFTER
+    # (tamatebako/tebako-runtime-openjdk v2.8.50 — the first owner release
+    # shipping all eight temurin legs; the line pairs the spec-33 entry
+    # routing (tebako#552) with the 64 MiB limnifs inline-metadata ceiling
+    # this runtime's universal image needs: the 2.5.0 owner capped its
+    # driver at 1 MiB and mounted the image EINVAL). The exe digests below
+    # are the owner release's OWN served bytes (the fetch cross-checks the
+    # per-asset .sha256 sidecars — the two-anchor rule): on seven of the
+    # eight legs the pair's exe IS tamatebako/tebako's v2.8.50 launcher,
+    # byte-identical; the windows-ucrt64 owner exe is openjdk's
+    # Authenticode-signed copy (spec 34 §8.2 signs in-leg, then hashes —
+    # its digest is NOT the launcher's monolith entry).
+    # owner_smoke sits AFTER
     # upstream on purpose: tools/build's indentation-anchored reader takes
     # the first 6-space `version:` in the flavor, which must be the
     # upstream's (the truffleruby 2026-09-07 local gate caught
     # owner_smoke.version shadowing it).
     #
     # tebako#716: the fetched owner pair's ASSET name follows the pinned
-    # owner release's own era. v2.8.21's assets are the segment-less
-    # spelling, so this block carries NO `implementation` key; the bump
-    # to a post-#716 owner release adds `implementation: temurin` here,
-    # and tools/pins.rb's OWNER_STEM composes the segmented name from it.
+    # owner release's own era. v2.8.50's assets carry the language
+    # segment, so this block declares `implementation: temurin` and
+    # tools/pins.rb's OWNER_STEM composes the segmented name from it.
     owner_smoke:
       repo: "tamatebako/tebako-runtime-openjdk"
-      release: "v2.8.47"
+      release: "v2.8.50"
       version: "21.0.12"
-      tebako: "2.8.47"
+      tebako: "2.8.50"
       implementation: "temurin"
       exe_sha256:
-        macos-arm64: "eeee3f7bff1f7b8bd3b17e624ab5856c4fb5d8edb446f79ab962b44bd5651704"
-        linux-gnu-x86_64: "7829d1a1f221aeca7bd79be40ebf3999563cbcff436f961b40bc08772ff06d1b"
+        macos-arm64: "7dd80f329b8933acadc0b8a1cac7a1a0eaa92989df67deb6d44961c1cb1caad3"
+        macos-x86_64: "b29cbf69298cb698232224f5ba1872ea94c9dbf3c48715b4131d7c3b1f2888b3"
+        linux-gnu-x86_64: "848391491f776242abf9e4ac6d7334cd9e689a245e19467cf5289ea44beffa53"
+        linux-gnu-arm64: "f393602190d0614582ca2875ea21ebeabc6908aa16b3d1b45fa4cb901a7212cc"
+        linux-musl-x86_64: "1db0d2d266e637f29cfde9bc4f05a9bcf904dff0586887270230d834a6459fdc"
+        linux-musl-arm64: "0666faf59c7e7971f07efe388a62cb0b912e323b4e75c971d0d75df57215ef69"
+        windows-ucrt64: "6ae2a74202650b18e5e67d69d5a08b189d4401622a5f2ac309018709bca2d917"
+        windows-ucrt-arm64: "275925074d0864b825c5133b02508212fb272aedb7668f23a2f30186a9be5da7"
       image_sha256:
-        macos-arm64: "e5a0c2d92fc8113d4a176f49b3612896f5368d60290cd0544a67eb264e39380e"
-        linux-gnu-x86_64: "ee03d7ac5e30e71650c645dbffdf71c1772279128aa65171d1ee8ab189804e1d"
+        macos-arm64: "1006c9f44c3da9ce9f5fe8c51903a6c335aa6c1f8641e920cb275f8265217cb0"
+        macos-x86_64: "640142e2312a239e591a30e4b1f1c26958277d591dcedca7c74c5323e300d50f"
+        linux-gnu-x86_64: "08726836049b3d017d7afd95055ef152e60141b63328da97554e39bbc6d0c481"
+        linux-gnu-arm64: "e64bf0df5a699c9902b54c2e9d5d89282cfb52c73273d2e1766a88c724938ada"
+        linux-musl-x86_64: "c7b8e164958c653b011bbd2541e9b7ab63891328ad41cf9af16ae074f41005c5"
+        linux-musl-arm64: "089eb6fd82b804ff4f047afdbb96f9f338d45eb9ee0bca5ef3dd3cd9ad0147ff"
+        windows-ucrt64: "31d8ee0db5cfde4d9a9772727e4e29a74488cf0b445c4d31233f8f3e105f6d8a"
+        windows-ucrt-arm64: "3ad226f303312c1395fc98c2b0f5349aa9f7cdab57845fbacd07040e72c352a2"
 
 build:
   system: repack          # no compilation: unpack, prune, image
@@ -132,35 +153,67 @@ runtime:
   # moves the line to the 64 MiB limnifs inline-metadata ceiling +
   # min_runtime_tebako floor launcher (tebako#666). wrapper_sha256
   # digests are the pinned line's own monolith SHA256SUMS entries
-  # (v2.8.49, fetched 2026-10-21).
-  wrapper_tebako: "2.8.49"
+  # (v2.8.50, fetched 2026-10-21) — one per platform the coverage list
+  # above declares (the launcher's windows-ucrt-arm64 asset ships since
+  # v2.8.46, so the full temurin surface is pinnable on this line).
+  wrapper_tebako: "2.8.50"
   wrapper_sha256:
-    macos-arm64: "e1da83755fd4513e8d9b6400910392093be4d3a00fd3d96bf8962de7d9158ee9"
-    linux-gnu-x86_64: "1457f49d4f6a6f2432cd4a7e475b42898812d7e53e5119a733a6433ddedb19da"
-    windows-ucrt64: "3b7416da7ccb4c022ad6b77c72ff65676aeb29f68d63e7e3a583666b378212ef"
+    macos-arm64: "7dd80f329b8933acadc0b8a1cac7a1a0eaa92989df67deb6d44961c1cb1caad3"
+    macos-x86_64: "b29cbf69298cb698232224f5ba1872ea94c9dbf3c48715b4131d7c3b1f2888b3"
+    linux-gnu-x86_64: "848391491f776242abf9e4ac6d7334cd9e689a245e19467cf5289ea44beffa53"
+    linux-gnu-arm64: "f393602190d0614582ca2875ea21ebeabc6908aa16b3d1b45fa4cb901a7212cc"
+    linux-musl-x86_64: "1db0d2d266e637f29cfde9bc4f05a9bcf904dff0586887270230d834a6459fdc"
+    linux-musl-arm64: "0666faf59c7e7971f07efe388a62cb0b912e323b4e75c971d0d75df57215ef69"
+    windows-ucrt64: "6c9fd2acae243ed11d6e6750658b449f90ab7eb7162756e226b099270131bdd3"
+    windows-ucrt-arm64: "275925074d0864b825c5133b02508212fb272aedb7668f23a2f30186a9be5da7"
 
 # Factory tools used by tools/build: the tfs CLI (the in-process imager)
 # and tebako-shim (the composed smoke's dispatcher) from the
 # tamatebako/tebako release. The digests are the pinned line's own
-# monolith SHA256SUMS entries (v2.8.49, fetched 2026-10-21); the fetch
+# monolith SHA256SUMS entries (v2.8.50, fetched 2026-10-21); the fetch
 # steps cross-check against the monolith. v2.5.0 is the model floor: tfs mkimage
 # re-serializes the embedded manifest THROUGH the tpkg model, and only
 # the 2.5.0+ model round-trips on_runtime + the widened requires grammar
 # (the 2.4.0 CLI would silently strip the owner edge). (link-unit rides
 # the pin shape for the day a leg needs the preload grant; the jvm
 # layout declares none — spec 33 §5.)
+#
+# The shim map covers seven platforms, NOT eight: tebako's
+# windows-ucrt-arm64 surface is runtime-own (tfs + tebako-pkg + the
+# launcher ship; NO tebako-shim — the v2.8.50 monolith carries none), so
+# the aarch64-windows-ucrt leg's composed smoke dispatches through the
+# pinned windows-ucrt64 shim under the runner's x64 emulation (Prism).
+# The dispatched-to artifacts — the jruby pair, the openjdk owner pair —
+# are the leg's NATIVE arm64 bytes; only the dispatcher rides emulation.
+# shim_dispatch_alias makes the substitution recipe data that pins.rb
+# resolves (a named map, never a code-side guess — spec 00 §9).
 tools:
   repo: "tamatebako/tebako"
-  release: "v2.8.49"
+  release: "v2.8.50"
+  # Per-leg dispatcher substitution, consulted by pins.rb for the
+  # tebako-shim tool only (every other tool ships a native asset for the
+  # requested platform; a key naming a tool that DOES ship natively would
+  # be a bug — pins.rb refuses it loudly).
+  shim_dispatch_alias:
+    windows-ucrt-arm64: windows-ucrt64
   sha256:
     tfs:
-      macos-arm64: "ab69970e60a0e46257f48843cb8a7de982564baf864e4583ba2beafd3d6ead3f"
-      linux-gnu-x86_64: "58d58ba392190f57325d948a7c4c9fd05494b40f4f0f3c4b2c242dd15f6b12e3"
-      windows-ucrt64: "d932e153c204cea81dc3ef60e2ef5e5de98cfac70b57dd651386f9ed184f3df9"
+      macos-arm64: "837ce51c3c3715fbc9a1cc61e6e43f6dfdcf823bce4b440bbc2399aebb37b621"
+      macos-x86_64: "1a7b5f1b05007e55a44dd39df81f9d9041d4473612c4a73f68d9d0a0853e3b55"
+      linux-gnu-x86_64: "cbc6f3e483b19c2293abf66eda63646b492bf46b645dda1b9a564e4f710c1387"
+      linux-gnu-arm64: "83e4833b35b7f519d6c9d13205a4b6a726b7a70b3e020dd9ae431fe8f48e2650"
+      linux-musl-x86_64: "5daca31a2f9cc14e6139b918b6d201080b8bea008f46dccbd655d07165341083"
+      linux-musl-arm64: "645af9e7c6bcb0eb2551cac503a412ac882f6cceac86c2f5ad797bd932640f81"
+      windows-ucrt64: "cae78731fee1fdbc3b84ddda82c1c08e13ed6d3f2e7199cbf1e55905361cde25"
+      windows-ucrt-arm64: "032820dc37c453d943b7f136f0c4c059d999f372b77856b14110a70dffcc5d32"
     tebako-shim:
-      macos-arm64: "3539806c05bd49d92b2f89765b2ffd8ea32568261f240350fa75a96ee99b5c57"
-      linux-gnu-x86_64: "7809932b3ca3cf69b2b76f19677ab60e7ef6040aff0898a100f97a608a794d24"
-      windows-ucrt64: "8780c35d9152ba005de651b99e2f0558d0a78cc58febfc2252e60562e7ec7964"
+      macos-arm64: "9e6753b27d936bd7ee864fd74e18b16134e0988ceffb7d52fda59be4dd698bd2"
+      macos-x86_64: "d03a3d891df07958415243db20d28c1c989623390f97bd15dd268f8270c25fed"
+      linux-gnu-x86_64: "caa24805234b86c4e92c516575c15746c02364327a66d6282d0c9b32ba6ebe5a"
+      linux-gnu-arm64: "816fca4f10f140eaafb2051d0e60c8076a0c33470d0e5111fe6a385831f1290e"
+      linux-musl-x86_64: "72fbe905becc12568111cbbe4d2f711c2be046eee4258bbed5118594308832f3"
+      linux-musl-arm64: "9dc232d87e1d9afa5ff36e568ad67e6b08e9f29cb6e61e21decb73552bdef52b"
+      windows-ucrt64: "209a0c4498c00399656e6b945988693747affa9418b083794bd34c310b050d54"
 
 image:
   format: limnifs

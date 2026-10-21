@@ -13,12 +13,12 @@ schema_version: 1
 # declare entrypoints). The on_runtime edge is NOT mirrored here (L3
 # mirrors resolution fields only): it lives in the release shard (the
 # shim's plan-time read) and the in-image manifest (the authority).
-# Platform matrix: temurin owner coverage is the constraint
-# (tamatebako/tebako-runtime-openjdk v2.5.0 ships macos-arm64 + linux-gnu-x86_64 +
-# windows-ucrt64). This first release declares the two POSIX rows the
-# acceptance gate covers; windows-ucrt64 is a named
-# follow-up (the universal image already serves it — the row lands with
-# its CI leg, never silently).
+# Platform matrix: the temurin owner coverage IS the coverage —
+# tamatebako/tebako-runtime-openjdk v2.8.50 ships all eight temurin legs,
+# and this entry declares exactly those rows (graalvm CE ships no
+# macos-x86_64 / windows-aarch64 upstream; jruby's owner edge is the
+# default temurin flavor). Every row names the SAME universal artifact —
+# the triplet binding of a composed jruby comes from the owner pair.
 payloads:
 - name: jruby
   kind: runtime
@@ -26,10 +26,28 @@ payloads:
   - version: '@@VERSION@@'
     implementation: jruby
     platforms:
+      aarch64-linux-gnu:
+        artifact: @@IMAGE_STEM@@.tfs
+        sha256: '@@IMAGE_SHA256@@'
+      aarch64-linux-musl:
+        artifact: @@IMAGE_STEM@@.tfs
+        sha256: '@@IMAGE_SHA256@@'
       aarch64-macos:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+      aarch64-windows-ucrt:
+        artifact: @@IMAGE_STEM@@.tfs
+        sha256: '@@IMAGE_SHA256@@'
       x86_64-linux-gnu:
+        artifact: @@IMAGE_STEM@@.tfs
+        sha256: '@@IMAGE_SHA256@@'
+      x86_64-linux-musl:
+        artifact: @@IMAGE_STEM@@.tfs
+        sha256: '@@IMAGE_SHA256@@'
+      x86_64-macos:
+        artifact: @@IMAGE_STEM@@.tfs
+        sha256: '@@IMAGE_SHA256@@'
+      x86_64-windows-ucrt:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
     release:
