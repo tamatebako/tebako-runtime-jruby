@@ -24,10 +24,13 @@
 #               the per-triplet release shard (image.filename = the
 #               universal asset — tpkg::runtime_store::entry_asset_names
 #               flows it verbatim, no product change), then the smokes:
-#               the standalone NEGATIVE gate (exit 65, spec 33 §5) and
-#               the COMPOSED smoke (shim → this runtime → the published
-#               temurin owner; a probe payload prints RUBY_ENGINE and
-#               loads json through jruby's own default gem).
+#               the standalone NEGATIVE gate (spec 33 §5's fail-closed
+#               refusal — exit 65 on POSIX legs, 78 on windows legs: the
+#               spec 18 layout check fires first there, see the smoke
+#               step's comment) and the COMPOSED smoke (shim → this
+#               runtime → the published temurin owner; a probe payload
+#               prints RUBY_ENGINE and loads json through jruby's own
+#               default gem).
 #
 # Inputs (env; the workflow's matrix exports the per-leg values):
 #   ROLE           image | pair        (REQUIRED)
@@ -502,8 +505,17 @@ EOF
   rc=$?
   set -e
   echo "$out" | head -3
-  [ "$rc" = 65 ] || { echo "::error::standalone jvm boot wanted exit 65 (named fail-closed), got $rc"; exit 1; }
-  echo "standalone negative smoke OK (exit 65)"
+  # The expected named refusal is platform-shaped: spec 18's env-image
+  # layout check (exit 78) precedes spec 33 §5's interpreter-grant
+  # refusal (exit 65). The universal image's layout declares the POSIX
+  # root /__tfs__; a POSIX wrapper's baked root matches, so the boot
+  # reaches the grant refusal (65), while a windows wrapper's baked root
+  # is A:/t and the layout check refuses first (78). Both are named
+  # fail-closed refusals — never a boot.
+  want=65
+  case "$TRIPLET" in *windows*) want=78 ;; esac
+  [ "$rc" = "$want" ] || { echo "::error::standalone jvm boot wanted exit $want (named fail-closed), got $rc"; exit 1; }
+  echo "standalone negative smoke OK (exit $want)"
 
   step "composed smoke (shim → this runtime → the published temurin owner)"
   # The pins (pins.rb): OWNER_REPO/OWNER_RELEASE/OWNER_STEM/
