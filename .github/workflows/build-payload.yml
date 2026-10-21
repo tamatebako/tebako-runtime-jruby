@@ -3,6 +3,12 @@ name: build-payload
 # tags) publish. spec 33's runtime-on-runtime form: the env image is the
 # jruby home (bytecode + every platform's jffi stub — ONE universal
 # asset), composed ON the published temurin java owner at dispatch.
+# The pair matrix is the temurin owner's full v2.8.50 surface (eight
+# triplets — the recipe's flavors.jvm.platforms is the SSOT): musl legs
+# smoke inside the leg's tpkg-builder container, windows legs are
+# runner-native, and the win-arm64 leg's composed smoke dispatches
+# through the pinned ucrt64 shim (tebako ships no ucrt-arm64 shim — the
+# recipe's shim_dispatch_alias).
 #
 # kind: runtime (spec 28/29/33): the image job ships the universal .tfs
 # (+ sidecar + the release-tier manifest); each pair leg ships the
@@ -131,17 +137,63 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Identity only. The matrix MIRRORS Tebakofile's
-        # flavors.jvm.platforms coverage (the recipe is the SSOT; the
-        # registry rows name the same list). windows-ucrt64 is a named
-        # follow-up (the universal image already serves it).
+        # Identity only (which leg, which runner, which exe suffix, which
+        # container). The matrix MIRRORS Tebakofile's flavors.jvm.platforms
+        # coverage (the recipe is the SSOT; the registry rows name the same
+        # list) — the full temurin owner surface the openjdk factory ships
+        # at v2.8.50. The musl legs run their smokes INSIDE the leg's
+        # tpkg-builder container (alpine, musl libc — the pinned musl
+        # binaries + the owner JRE execute only there; the sibling
+        # factories' container-leg grammar) while the fetches stay on the
+        # glibc host (pure downloads + hash checks). The windows legs are
+        # runner-native; jruby's pair role untars nothing, so no msys2
+        # setup rides either (and no leg runs a bundler — the publish job
+        # is the central macos one — so the win-arm64 leg needs no
+        # clangarm64 toolchain; cf. openjdk#69's bundle-step need, absent
+        # here).
         platform:
           - triplet: aarch64-macos
             asset_platform: macos-arm64
             os: macos-14
+            exe_suffix: ""
+          # The Intel macOS leg rides the macos-15-intel runner (macos-13
+          # is retired; the openjdk factory's same leg runs there).
+          - triplet: x86_64-macos
+            asset_platform: macos-x86_64
+            os: macos-15-intel
+            exe_suffix: ""
           - triplet: x86_64-linux-gnu
             asset_platform: linux-gnu-x86_64
             os: ubuntu-24.04
+            exe_suffix: ""
+          - triplet: aarch64-linux-gnu
+            asset_platform: linux-gnu-arm64
+            os: ubuntu-24.04-arm
+            exe_suffix: ""
+          - triplet: x86_64-linux-musl
+            asset_platform: linux-musl-x86_64
+            os: ubuntu-24.04
+            exe_suffix: ""
+            container: ghcr.io/tamatebako/tpkg-builder-x86_64-linux-musl:v1
+          - triplet: aarch64-linux-musl
+            asset_platform: linux-musl-arm64
+            os: ubuntu-24.04-arm
+            exe_suffix: ""
+            container: ghcr.io/tamatebako/tpkg-builder-aarch64-linux-musl:v1
+          - triplet: x86_64-windows-ucrt
+            asset_platform: windows-ucrt64
+            os: windows-latest
+            exe_suffix: .exe
+          # The win-arm64 leg rides the windows-11-arm runner (the label
+          # the product repo + the openjdk/bun factories' arm64 legs use).
+          # tebako ships no windows-ucrt-arm64 tebako-shim — the composed
+          # smoke's dispatcher is the pinned ucrt64 shim under the runner's
+          # x64 emulation (the recipe's shim_dispatch_alias); the pair and
+          # the owner pair are the leg's NATIVE arm64 bytes.
+          - triplet: aarch64-windows-ucrt
+            asset_platform: windows-ucrt-arm64
+            os: windows-11-arm
+            exe_suffix: .exe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Read the toolchain pins (Tebakofile is the SSOT)
@@ -150,7 +202,8 @@ jobs:
       - name: Fetch the imager (pinned by Tebakofile, sha256-verified)
         shell: bash
         env:
-          TFS_BIN: .packager/tfs
+          TFS_BIN: .packager/tfs${{ matrix.platform.exe_suffix }}
+          CONTAINER: ${{ matrix.platform.container }}
         run: |
           set -euo pipefail
           mkdir -p .packager
@@ -161,7 +214,17 @@ jobs:
           got=$(awk -v a="$TFS_ASSET" '$2 == a {print $1}' SHA256SUMS)
           [ "$got" = "$TFS_SHA256" ] || { echo "::error::pin mismatch for $TFS_ASSET: Tebakofile=$TFS_SHA256 release=${got:-ABSENT}"; exit 1; }
           chmod +x "$TFS_BIN"
-          "$TFS_BIN" > /dev/null
+          # Bare invocation prints the help and exits 0 (tfs has no
+          # --version flag): the dead-binary smoke. The musl legs' imager
+          # executes only under a musl userland — the smoke rides the
+          # leg's container, the workspace bind-mounted at its host path
+          # so the relative TFS_BIN holds.
+          if [ -n "$CONTAINER" ]; then
+            docker run --rm -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+              "$CONTAINER" "$TFS_BIN" > /dev/null
+          else
+            "$TFS_BIN" > /dev/null
+          fi
       - name: Fetch the wrapper (pinned by Tebakofile)
         shell: bash
         env:
@@ -203,11 +266,41 @@ jobs:
           ROLE: pair
           TRIPLET: ${{ matrix.platform.triplet }}
           ASSET_PLATFORM: ${{ matrix.platform.asset_platform }}
-          TFS_CLI: .packager/tfs
+          EXE_SUFFIX: ${{ matrix.platform.exe_suffix }}
+          TFS_CLI: .packager/tfs${{ matrix.platform.exe_suffix }}
           IMAGE_TARBALL: out/image
-        # WRAPPER_BIN / SHIM_BIN flow through $GITHUB_ENV — process env,
-        # not the static env: context.
-        run: tools/build
+          CONTAINER: ${{ matrix.platform.container }}
+        # WRAPPER_BIN / SHIM_BIN (the fetch steps) and the OWNER_*/DEP_*
+        # composed-smoke pins (pins.rb) flow through $GITHUB_ENV — process
+        # env, not the static env: context.
+        run: |
+          set -euo pipefail
+          if [ -n "$CONTAINER" ]; then
+            # The musl leg: every binary tools/build executes is
+            # musl-linked — the imager (the probe payloads' mkimage), the
+            # wrapper (the negative smoke), the shim, the owner JVM (the
+            # composed smoke) — so the pair + the smokes run INSIDE the
+            # leg's tpkg-builder container (alpine, musl libc; bash, curl,
+            # ca-certificates, ruby and coreutils are baked in). The
+            # workspace bind-mounts at its host path so the pins' paths
+            # ($PWD-anchored WRAPPER_BIN/SHIM_BIN, relative TFS_CLI /
+            # IMAGE_TARBALL) hold verbatim inside.
+            docker run --rm \
+              -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+              -e ROLE -e TRIPLET -e ASSET_PLATFORM -e EXE_SUFFIX -e TFS_CLI -e FLAVOR \
+              -e WRAPPER_BIN -e SHIM_BIN -e IMAGE_TARBALL -e GITHUB_REF_NAME \
+              -e OWNER_REPO -e OWNER_RELEASE -e OWNER_STEM -e OWNER_STORE_ID \
+              -e OWNER_EXE_SHA256 -e OWNER_IMAGE_SHA256 -e DEP_STORE_ID \
+              "$CONTAINER" bash tools/build
+          else
+            tools/build
+          fi
+      # The container builds as root; the bind-mounted out/ tree lands
+      # root-owned on the host, and the upload step must read it (the
+      # sibling factories' handback — bun's host-side shape).
+      - name: Hand the container's outputs back to the host user
+        if: matrix.platform.container != null
+        run: sudo chown -R "$USER:$USER" out .packager
       - name: Upload payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -302,12 +395,17 @@ jobs:
           upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs"
           upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256"
           # Per-triplet: the exe + sidecar + shard (never the sibling
-          # payload-*.yaml).
+          # payload-*.yaml). The windows legs' exe carries .exe (the
+          # shard's filename names it) — resolve the on-disk exe name
+          # from the shard stem, never a hardcoded suffix.
           for shard in out/pair-*/tebako-runtime-*.manifest.json; do
             dir="$(dirname "$shard")"
             stem="$(basename "$shard" .manifest.json)"
-            upload_write_once "$dir/$stem"
-            upload_write_once "$dir/$stem.sha256"
+            exe="$stem"
+            [ -f "$dir/$exe" ] || exe="$stem.exe"
+            [ -f "$dir/$exe" ] || { echo "::error::no exe beside $shard (looked for $stem and $stem.exe)"; exit 1; }
+            upload_write_once "$dir/$exe"
+            upload_write_once "$dir/$exe.sha256"
             upload_write_once "$shard"
           done
       - name: Derive + upload the monoliths (manifest.json + SHA256SUMS.txt)
@@ -350,7 +448,9 @@ jobs:
           for shard in out/pair-*/tebako-runtime-*.manifest.json; do
             dir="$(dirname "$shard")"
             stem="$(basename "$shard" .manifest.json)"
-            cp "$dir/$stem" "$dir/$stem.sha256" "$shard" attest-staging/
+            exe="$stem"
+            [ -f "$dir/$exe" ] || exe="$stem.exe"
+            cp "$dir/$exe" "$dir/$exe.sha256" "$shard" attest-staging/
           done
           cp manifest.json SHA256SUMS.txt attest-staging/
       - name: Attest build provenance

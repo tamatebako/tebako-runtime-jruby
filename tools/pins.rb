@@ -100,22 +100,36 @@ unless ARGV.include?("--release-only")
   exe = platform.start_with?("windows") ? ".exe" : ""
   # Tools the recipe pins for POSIX legs only: a missing platform pin
   # warns + skips; for every other tool a missing pin is a named error,
-  # never a guess. (This feedstock ships NO windows leg — upstream has no
-  # windows build — but the guard stays: a tool's POSIX-only scope is the
-  # recipe's data, not this script's assumption.)
+  # never a guess. (A tool's POSIX-only scope is the recipe's data, not
+  # this script's assumption — the guard predates the windows legs and
+  # stays.)
+  # The composed smoke's dispatcher (tebako-shim) may ride the recipe's
+  # shim_dispatch_alias: tebako ships NO windows-ucrt-arm64 shim (the
+  # win-arm64 surface is runtime-own), so that leg's smoke dispatches
+  # through the aliased x64 shim under the runner's emulation. The alias
+  # is recipe data; a tool that ships a NATIVE pin for an aliased platform
+  # is a contradiction — refuse it, never pick silently (spec 00 §9).
   posix_only = %w[link-unit]
+  shim_alias = tools["shim_dispatch_alias"] || {}
   tools.fetch("sha256").each do |tool, shas|
-    sha = shas[platform]
+    pin_platform = platform
+    if tool == "tebako-shim" && shim_alias.key?(platform)
+      die "Tebakofile: shim_dispatch_alias names #{platform} but tools.sha256.tebako-shim pins it natively — one of them is stale" if shas.key?(platform)
+      pin_platform = shim_alias.fetch(platform)
+      warn "pins.rb: tebako-shim for #{platform} resolves via shim_dispatch_alias → #{pin_platform} (the pinned line ships no native #{platform} shim)"
+    end
+    sha = shas[pin_platform]
     if sha.nil?
-      die "Tebakofile: no tools.sha256.#{tool}.#{platform} pin" unless posix_only.include?(tool)
-      warn "pins.rb: #{tool} has no #{platform} pin (POSIX-only tool — skipped)"
+      die "Tebakofile: no tools.sha256.#{tool}.#{pin_platform} pin" unless posix_only.include?(tool)
+      warn "pins.rb: #{tool} has no #{pin_platform} pin (POSIX-only tool — skipped)"
       next
     end
+    pin_exe = pin_platform.start_with?("windows") ? ".exe" : ""
     key = tool.upcase.tr("-", "_")
     asset = if tool == "link-unit"
-              "#{tool}-#{version}-#{platform}.tar.gz"
+              "#{tool}-#{version}-#{pin_platform}.tar.gz"
             else
-              "#{tool}-#{version}-#{platform}#{exe}"
+              "#{tool}-#{version}-#{pin_platform}#{pin_exe}"
             end
     pairs["#{key}_ASSET"] = asset
     pairs["#{key}_SHA256"] = sha
