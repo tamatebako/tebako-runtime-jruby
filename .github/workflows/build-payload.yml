@@ -6,9 +6,12 @@ name: build-payload
 # The pair matrix is the temurin owner's full v2.8.50 surface (eight
 # triplets — the recipe's flavors.jvm.platforms is the SSOT): musl legs
 # smoke inside the leg's tpkg-builder container, windows legs are
-# runner-native, and the win-arm64 leg's composed smoke dispatches
-# through the pinned ucrt64 shim (tebako ships no ucrt-arm64 shim — the
-# recipe's shim_dispatch_alias).
+# runner-native, and the win-arm64 leg waives the shim-driven smokes —
+# tebako ships no ucrt-arm64 tebako-shim (the recipe's no_native_shim
+# list) and an emulated x64 shim cannot substitute: the store scan's
+# platform filter is the dispatcher's compiled-in arch, so it never sees
+# the arm64 store entries. pins.rb emits COMPOSED_SMOKE=0 there; the
+# composed windows wire is proven on the x86_64 leg.
 #
 # kind: runtime (spec 28/29/33): the image job ships the universal .tfs
 # (+ sidecar + the release-tier manifest); each pair leg ships the
@@ -16,9 +19,12 @@ name: build-payload
 # tamatebako/tebako's own asset) + sidecar + the per-triplet release
 # shard (image.filename = the universal asset — entry_asset_names flows
 # it verbatim, no product change). The pair legs' smokes: the spec 33 §5
-# standalone fail-closed gate (exit 65) + the COMPOSED wire (shim → jruby
-# → temurin owner) + the cext negative cell (a native-abi payload fails
-# by name at dispatch — the shard's abi:"none" sentinel). The publish job uploads all of it, derives the monoliths
+# standalone fail-closed gate (exit 65 on POSIX legs, 78 on windows legs —
+# the layout check precedes the grant refusal) + the COMPOSED wire (shim →
+# jruby → temurin owner) + the cext negative cell (a native-abi payload
+# fails by name at dispatch — the shard's abi:"none" sentinel); the two
+# shim-driven cells are waived on a leg whose platform the pinned line
+# ships no dispatcher for (the win-arm64 leg — see the matrix comment). The publish job uploads all of it, derives the monoliths
 # (manifest.json + SHA256SUMS.txt, trr#140) from the shards + sidecars,
 # renders the registry entry from manifests/registry.yaml, and lands it
 # by bot PR. The bot PR rides the CI PAT (tebako#686): a
@@ -186,10 +192,13 @@ jobs:
             exe_suffix: .exe
           # The win-arm64 leg rides the windows-11-arm runner (the label
           # the product repo + the openjdk/bun factories' arm64 legs use).
-          # tebako ships no windows-ucrt-arm64 tebako-shim — the composed
-          # smoke's dispatcher is the pinned ucrt64 shim under the runner's
-          # x64 emulation (the recipe's shim_dispatch_alias); the pair and
-          # the owner pair are the leg's NATIVE arm64 bytes.
+          # tebako ships no windows-ucrt-arm64 tebako-shim (the recipe's
+          # no_native_shim): pins.rb emits no TEBAKO_SHIM_* pins +
+          # COMPOSED_SMOKE=0, the dispatcher fetch step skips, and
+          # tools/build waives the shim-driven smokes — the pair, the
+          # standalone fail-closed gate (exit 78 on windows: the layout
+          # check precedes the grant refusal), and every pin cross-check
+          # (the owner sidecars included) still run.
           - triplet: aarch64-windows-ucrt
             asset_platform: windows-ucrt-arm64
             os: windows-11-arm
@@ -197,8 +206,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Read the toolchain pins (Tebakofile is the SSOT)
+        id: pins
         shell: bash
-        run: ruby tools/pins.rb "${{ matrix.platform.asset_platform }}" jvm --env >> "$GITHUB_ENV"
+        run: |
+          pins="$(ruby tools/pins.rb "${{ matrix.platform.asset_platform }}" jvm --env)"
+          printf '%s\n' "$pins" >> "$GITHUB_ENV"
+          # The dispatcher fetch below skips when the pinned line ships no
+          # tebako-shim for this platform (the recipe's no_native_shim —
+          # pins.rb emits no TEBAKO_SHIM_ASSET there).
+          if printf '%s\n' "$pins" | grep -q '^TEBAKO_SHIM_ASSET='; then
+            echo "has_shim=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_shim=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Fetch the imager (pinned by Tebakofile, sha256-verified)
         shell: bash
         env:
@@ -239,8 +259,11 @@ jobs:
           echo "WRAPPER_BIN=$PWD/.packager/tebako-runtime-launcher" >> "$GITHUB_ENV"
       # The dispatcher for the composed smoke (spec 33's real wire: shim
       # → dep runtime → owner runtime). Same two-anchor rule as the
-      # imager.
+      # imager. Skipped where the pinned line ships no native shim (the
+      # recipe's no_native_shim — pins.rb then emits no TEBAKO_SHIM_*
+      # pins, and tools/build waives the shim-driven cells).
       - name: Fetch the dispatcher (tebako-shim, pinned by Tebakofile)
+        if: steps.pins.outputs.has_shim == 'true'
         shell: bash
         run: |
           set -euo pipefail

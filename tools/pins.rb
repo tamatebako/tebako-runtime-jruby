@@ -14,7 +14,9 @@
 # shape so the machinery mirrors the sibling runtime feedstocks.
 # --release-only emits just TEBAKO_RELEASE/PKG_NAME/PKG_VERSION. A tool
 # listed in tools.sha256 without a pin for the requested platform is a
-# named error, never a guess (spec 00 §9).
+# named error, never a guess (spec 00 §9) — the declared exceptions warn
+# + skip: POSIX-only tools (link-unit) and the tools.no_native_shim list
+# (the pinned line ships no tebako-shim for those platforms at all).
 #
 # Runtime-promotion additions (the kind: runtime pair): the wrapper exe
 # pin flows from Tebakofile's runtime.wrapper_tebako (WRAPPER_RELEASE /
@@ -103,33 +105,38 @@ unless ARGV.include?("--release-only")
   # never a guess. (A tool's POSIX-only scope is the recipe's data, not
   # this script's assumption — the guard predates the windows legs and
   # stays.)
-  # The composed smoke's dispatcher (tebako-shim) may ride the recipe's
-  # shim_dispatch_alias: tebako ships NO windows-ucrt-arm64 shim (the
-  # win-arm64 surface is runtime-own), so that leg's smoke dispatches
-  # through the aliased x64 shim under the runner's emulation. The alias
-  # is recipe data; a tool that ships a NATIVE pin for an aliased platform
-  # is a contradiction — refuse it, never pick silently (spec 00 §9).
+  # tebako-shim is the one tool with a per-platform ABSENCE: the pinned
+  # line ships no native shim for the platforms the recipe's
+  # tools.no_native_shim list declares (the windows-ucrt-arm64 surface is
+  # runtime-own — tfs + tebako-pkg + the launcher, no dispatcher). The x64
+  # shim cannot substitute under emulation — the store scan's platform
+  # filter is the dispatcher's compiled-in arch, so it would never see
+  # this platform's store entries. A listed platform skips the shim pin
+  # (a NATIVE shim pin for a listed platform is a contradiction — refuse
+  # it, never pick silently, spec 00 §9) and COMPOSED_SMOKE=0 flows to
+  # tools/build, waiving the shim-driven cells on the leg.
   posix_only = %w[link-unit]
-  shim_alias = tools["shim_dispatch_alias"] || {}
+  no_native_shim = tools["no_native_shim"] || []
+  die "Tebakofile: tools.no_native_shim must be a list of asset platforms" unless no_native_shim.is_a?(Array)
   tools.fetch("sha256").each do |tool, shas|
-    pin_platform = platform
-    if tool == "tebako-shim" && shim_alias.key?(platform)
-      die "Tebakofile: shim_dispatch_alias names #{platform} but tools.sha256.tebako-shim pins it natively — one of them is stale" if shas.key?(platform)
-      pin_platform = shim_alias.fetch(platform)
-      warn "pins.rb: tebako-shim for #{platform} resolves via shim_dispatch_alias → #{pin_platform} (the pinned line ships no native #{platform} shim)"
-    end
-    sha = shas[pin_platform]
-    if sha.nil?
-      die "Tebakofile: no tools.sha256.#{tool}.#{pin_platform} pin" unless posix_only.include?(tool)
-      warn "pins.rb: #{tool} has no #{pin_platform} pin (POSIX-only tool — skipped)"
+    if tool == "tebako-shim" && no_native_shim.include?(platform)
+      die "Tebakofile: no_native_shim lists #{platform} but tools.sha256.tebako-shim pins it natively — one of them is stale" if shas.key?(platform)
+      warn "pins.rb: the pinned line ships no native tebako-shim for #{platform} (tools.no_native_shim) — the shim-driven smokes are waived on this leg"
+      pairs["COMPOSED_SMOKE"] = "0"
       next
     end
-    pin_exe = pin_platform.start_with?("windows") ? ".exe" : ""
+    sha = shas[platform]
+    if sha.nil?
+      die "Tebakofile: no tools.sha256.#{tool}.#{platform} pin" unless posix_only.include?(tool)
+      warn "pins.rb: #{tool} has no #{platform} pin (POSIX-only tool — skipped)"
+      next
+    end
+    pin_exe = platform.start_with?("windows") ? ".exe" : ""
     key = tool.upcase.tr("-", "_")
     asset = if tool == "link-unit"
-              "#{tool}-#{version}-#{pin_platform}.tar.gz"
+              "#{tool}-#{version}-#{platform}.tar.gz"
             else
-              "#{tool}-#{version}-#{pin_platform}#{pin_exe}"
+              "#{tool}-#{version}-#{platform}#{pin_exe}"
             end
     pairs["#{key}_ASSET"] = asset
     pairs["#{key}_SHA256"] = sha
