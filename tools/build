@@ -24,10 +24,19 @@
 #               the per-triplet release shard (image.filename = the
 #               universal asset — tpkg::runtime_store::entry_asset_names
 #               flows it verbatim, no product change), then the smokes:
-#               the standalone NEGATIVE gate (exit 65, spec 33 §5) and
-#               the COMPOSED smoke (shim → this runtime → the published
-#               temurin owner; a probe payload prints RUBY_ENGINE and
-#               loads json through jruby's own default gem).
+#               the standalone NEGATIVE gate (spec 33 §5's fail-closed
+#               refusal — exit 65 on POSIX legs, 78 on windows legs: the
+#               spec 18 layout check fires first there, see the smoke
+#               step's comment) and the COMPOSED smoke (shim → this
+#               runtime → the published temurin owner; a probe payload
+#               prints RUBY_ENGINE and loads json through jruby's own
+#               default gem) + the cext negative cell — the two shim-driven
+#               cells are WAIVED on platforms the pinned tebako line ships
+#               no tebako-shim for (COMPOSED_SMOKE=0 via the recipe's
+#               no_native_shim; an emulated x64 dispatcher cannot see this
+#               platform's store entries — its platform filter is the
+#               compiled-in arch). The owner pins still cross-check against
+#               the owner release's own bytes + sidecars on a waived leg.
 #
 # Inputs (env; the workflow's matrix exports the per-leg values):
 #   ROLE           image | pair        (REQUIRED)
@@ -39,7 +48,12 @@
 #   TAR            archiver               (default: tar)
 #   TFS_CLI        tfs-cli binary, the in-process imager (default: tfs)
 #   WRAPPER_BIN    the tebako-runtime-launcher exe (pair legs, REQUIRED)
-#   SHIM_BIN       the tebako-shim exe (pair legs, REQUIRED — the smoke)
+#   SHIM_BIN       the tebako-shim exe (pair legs — REQUIRED unless
+#                  COMPOSED_SMOKE=0; the shim-driven smokes' dispatcher)
+#   COMPOSED_SMOKE 1 (default) runs the shim-driven cells (composed + cext
+#                  negative); 0 waives them — pins.rb emits 0 for the
+#                  recipe's no_native_shim platforms. The standalone
+#                  fail-closed gate runs either way.
 #   IMAGE_TARBALL  ROLE=pair: the image leg's artifact dir carrying
 #                  <IMAGE_STEM>.tfs + .sha256 (REQUIRED — the pair leg
 #                  never rebuilds the image; one image, one digest)
@@ -502,9 +516,49 @@ EOF
   rc=$?
   set -e
   echo "$out" | head -3
-  [ "$rc" = 65 ] || { echo "::error::standalone jvm boot wanted exit 65 (named fail-closed), got $rc"; exit 1; }
-  echo "standalone negative smoke OK (exit 65)"
+  # The expected named refusal is platform-shaped: spec 18's env-image
+  # layout check (exit 78) precedes spec 33 §5's interpreter-grant
+  # refusal (exit 65). The universal image's layout declares the POSIX
+  # root /__tfs__; a POSIX wrapper's baked root matches, so the boot
+  # reaches the grant refusal (65), while a windows wrapper's baked root
+  # is A:/t and the layout check refuses first (78). Both are named
+  # fail-closed refusals — never a boot.
+  want=65
+  case "$TRIPLET" in *windows*) want=78 ;; esac
+  [ "$rc" = "$want" ] || { echo "::error::standalone jvm boot wanted exit $want (named fail-closed), got $rc"; exit 1; }
+  echo "standalone negative smoke OK (exit $want)"
 
+  # The shim-driven cells (the composed + cext smokes) need a dispatcher
+  # the pinned line actually SHIPS for this platform — pins.rb emits
+  # COMPOSED_SMOKE=0 for the recipe's no_native_shim platforms (today
+  # windows-ucrt-arm64: the product's runtime-own surface; an emulated x64
+  # shim cannot substitute — its store scan filters on the dispatcher's
+  # compiled-in arch, so it never sees this platform's store entries). A
+  # waived leg still downloads the owner pair and hashes its BYTES against
+  # the recipe pin (plus the owner release's own sidecar — two anchors);
+  # only the shim exec itself is waived.
+  COMPOSED_SMOKE="${COMPOSED_SMOKE:-1}"
+  if [ "$COMPOSED_SMOKE" != 1 ]; then
+    step "shim-driven smokes WAIVED (COMPOSED_SMOKE=0 — no tebako-shim ships for $ASSET_PLATFORM in the pinned line)"
+    for v in OWNER_REPO OWNER_RELEASE OWNER_STEM OWNER_EXE_SHA256 OWNER_IMAGE_SHA256; do
+      eval "val=\${$v:-}"
+      [ -n "$val" ] || { echo "::error::$v unset — run tools/pins.rb for this leg first (the owner pin cross-check)"; exit 1; }
+    done
+    obase="https://github.com/$OWNER_REPO/releases/download/$OWNER_RELEASE"
+    for f in exe tfs; do
+      case "$f" in
+        exe) want="$OWNER_EXE_SHA256"; asset="$OWNER_STEM$EXE_SUFFIX"; side="$asset.sha256" ;;
+        tfs) want="$OWNER_IMAGE_SHA256"; asset="$OWNER_STEM.tfs"; side="$asset.sha256" ;;
+      esac
+      curl -sL --fail -o "$WORK/owner.$f" "$obase/$asset"
+      sha256_check "$want" "$WORK/owner.$f"
+      curl -sL --fail -o "$WORK/owner.$f.sha256" "$obase/$side"
+      got="$(cut -d' ' -f1 "$WORK/owner.$f.sha256")"
+      [ "$got" = "$want" ] || { echo "::error::owner release sidecar disagrees with the recipe pin for $f: sidecar=$got recipe=$want"; exit 1; }
+      echo "owner $f bytes + release sidecar == recipe pin (two anchors; the waived cells would add only the shim exec)"
+    done
+    echo "waived leg OK (the standalone fail-closed gate + the owner bytes/sidecar pin cross-check; the composed windows wire is proven on the x86_64 leg)"
+  else
   step "composed smoke (shim → this runtime → the published temurin owner)"
   # The pins (pins.rb): OWNER_REPO/OWNER_RELEASE/OWNER_STEM/
   # OWNER_STORE_ID/OWNER_EXE_SHA256/OWNER_IMAGE_SHA256/DEP_STORE_ID and
@@ -649,4 +703,5 @@ RUBY
     *must\ never\ print*) echo "::error::the cext payload EXECUTED on jruby"; exit 1 ;;
   esac
   echo "cext negative smoke OK (named dispatch failure, exit $crc — never a boot)"
+  fi
 fi

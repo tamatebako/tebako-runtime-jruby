@@ -180,22 +180,28 @@ runtime:
 #
 # The shim map covers seven platforms, NOT eight: tebako's
 # windows-ucrt-arm64 surface is runtime-own (tfs + tebako-pkg + the
-# launcher ship; NO tebako-shim — the v2.8.50 monolith carries none), so
-# the aarch64-windows-ucrt leg's composed smoke dispatches through the
-# pinned windows-ucrt64 shim under the runner's x64 emulation (Prism).
-# The dispatched-to artifacts — the jruby pair, the openjdk owner pair —
-# are the leg's NATIVE arm64 bytes; only the dispatcher rides emulation.
-# shim_dispatch_alias makes the substitution recipe data that pins.rb
-# resolves (a named map, never a code-side guess — spec 00 §9).
+# launcher ship; NO tebako-shim — the v2.8.50 monolith carries none).
+# An emulated x64 shim cannot substitute: the store scan's platform
+# filter is the dispatcher's COMPILED-IN arch (tpkg::runtime_store's
+# scan_cached → platform_string), so a ucrt64 shim never sees
+# windows-ucrt-arm64 store entries and the dispatch fails by name ("no
+# cached ruby runtimes for this platform"). The shim-driven cells (the
+# composed + cext smokes) are therefore WAIVED on that leg — pins.rb
+# emits COMPOSED_SMOKE=0 for a platform the no_native_shim list declares,
+# and the composed windows wire's proof lives on the x86_64 leg (a
+# platform the product DOES ship a dispatcher for). The win-arm64 leg's
+# standalone fail-closed gate, artifact pairing, and every pin
+# cross-check (the owner release's sidecars included) run unchanged.
 tools:
   repo: "tamatebako/tebako"
   release: "v2.8.50"
-  # Per-leg dispatcher substitution, consulted by pins.rb for the
-  # tebako-shim tool only (every other tool ships a native asset for the
-  # requested platform; a key naming a tool that DOES ship natively would
-  # be a bug — pins.rb refuses it loudly).
-  shim_dispatch_alias:
-    windows-ucrt-arm64: windows-ucrt64
+  # Asset platforms the pinned line ships NO native tebako-shim for (the
+  # runtime-own surface). Recipe data, never a code-side guess (spec 00
+  # §9): pins.rb skips the shim pin for a listed platform — a NATIVE shim
+  # pin for a listed platform is a contradiction it refuses loudly — and
+  # emits COMPOSED_SMOKE=0, so tools/build waives the shim-driven cells.
+  no_native_shim:
+    - windows-ucrt-arm64
   sha256:
     tfs:
       macos-arm64: "837ce51c3c3715fbc9a1cc61e6e43f6dfdcf823bce4b440bbc2399aebb37b621"
