@@ -29,27 +29,51 @@ payloads:
       aarch64-linux-gnu:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
       aarch64-linux-musl:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
       aarch64-macos:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
       aarch64-windows-ucrt:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
       x86_64-linux-gnu:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
       x86_64-linux-musl:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
       x86_64-macos:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
       x86_64-windows-ucrt:
         artifact: @@IMAGE_STEM@@.tfs
         sha256: '@@IMAGE_SHA256@@'
+        blksum:
+          filename: @@IMAGE_STEM@@.tfs.blksum.json
+          sha256: '@@BLKSUM_SHA256@@'
     release:
       ref: tfs:github:tamatebako/tebako-runtime-jruby:@@TAG@@
   default: '@@VERSION@@'
