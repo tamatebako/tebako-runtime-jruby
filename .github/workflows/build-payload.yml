@@ -417,6 +417,9 @@ jobs:
           # The universal image + its sidecar (the image leg's artifact).
           upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs"
           upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256"
+          # The lazy-mount sidecar and its anchor (spec 39 §3; tebako#868).
+          upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs.blksum.json"
+          upload_write_once "out/image/$RUNTIME_IMAGE_STEM.tfs.blksum.json.sha256"
           # Per-triplet: the exe + sidecar + shard (never the sibling
           # payload-*.yaml). The windows legs' exe carries .exe (the
           # shard's filename names it) — resolve the on-disk exe name
@@ -438,7 +441,9 @@ jobs:
           tag="${{ github.ref_name }}"
           ruby -rjson -e 'puts JSON.pretty_generate(ARGV.sort.map { |f| JSON.parse(File.read(f)) })' \
             out/pair-*/tebako-runtime-*.manifest.json > manifest.json
-          cat out/pair-*/tebako-runtime-*.sha256 "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256" > SHA256SUMS.txt
+          cat out/pair-*/tebako-runtime-*.sha256 \
+              "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256" \
+              "out/image/$RUNTIME_IMAGE_STEM.tfs.blksum.json.sha256" > SHA256SUMS.txt
           # The derived monoliths are metadata — pure functions of the
           # served shards — so a drifted one is debris and replaces (a
           # single-asset replace is the probe-proven safe case; the wedge
@@ -467,7 +472,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p attest-staging
-          cp "out/image/$RUNTIME_IMAGE_STEM.tfs" "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256" attest-staging/
+          cp "out/image/$RUNTIME_IMAGE_STEM.tfs" "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256" \
+             "out/image/$RUNTIME_IMAGE_STEM.tfs.blksum.json" "out/image/$RUNTIME_IMAGE_STEM.tfs.blksum.json.sha256" \
+             attest-staging/
           for shard in out/pair-*/tebako-runtime-*.manifest.json; do
             dir="$(dirname "$shard")"
             stem="$(basename "$shard" .manifest.json)"
@@ -491,10 +498,12 @@ jobs:
           set -euo pipefail
           tag="${{ github.ref_name }}"
           img_sha="$(cut -d' ' -f1 "out/image/$RUNTIME_IMAGE_STEM.tfs.sha256")"
+          blk_sha="$(cut -d' ' -f1 "out/image/$RUNTIME_IMAGE_STEM.tfs.blksum.json.sha256")"
           sed -e "s|@@VERSION@@|$PKG_VERSION|g" \
               -e "s|@@IMAGE_STEM@@|$RUNTIME_IMAGE_STEM|g" \
               -e "s|@@TAG@@|$tag|g" \
               -e "s|@@IMAGE_SHA256@@|$img_sha|g" \
+              -e "s|@@BLKSUM_SHA256@@|$blk_sha|g" \
               manifests/registry.yaml > tpkg-registry.yaml
       # main is branch-protected (and the GitHub-Actions bypass is not
       # available on this plan): the registry lands by bot PR + auto-merge,
