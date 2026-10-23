@@ -459,6 +459,39 @@ jobs:
             fi
           done
 
+      # Signing parity with the sibling runtime factories (spec 09 §5):
+      # every served name carries a detached `.asc`, signed by the ONE
+      # release machinery (tebako-release) over the bytes the release
+      # listing serves. The gate keeps unsigned first-class — with
+      # TEBAKO_RELEASE_SIGNING_ENABLED unset the pass prints its disarm
+      # line and exits 0, so this step runs on every publish and can never
+      # take a release down. Armed, it needs TEBAKO_RELEASE_SIGNING_KEY
+      # (the house secret the sibling factories use) and signs whatever the
+      # listing shows as stale, `.asc` included in the coverage assertion.
+      - name: Set up ruby for the release machinery
+        if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Sign the release assets (spec 09 §5)
+        if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.TEBAKO_CI_PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TEBAKO_CI_PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          TEBAKO_RELEASE_REPO: ${{ github.repository }}
+          TEBAKO_RELEASE_SIGNING_ENABLED: ${{ vars.TEBAKO_RELEASE_SIGNING_ENABLED }}
+          TEBAKO_RELEASE_SIGNING_KEY: ${{ secrets.TEBAKO_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          # The tag IS the line here; the machinery derives v<VERSION> when
+          # no explicit tag is given, so both spellings are passed.
+          TEBAKO_RELEASE_TAG="$GITHUB_REF_NAME"
+          TEBAKO_VERSION="${GITHUB_REF_NAME#v}"
+          export TEBAKO_RELEASE_TAG TEBAKO_VERSION
+          bundle exec tebako-release sign
+
       # SLSA L3 provenance over the exact bytes this tag ships — the
       # universal image + its sidecar, each triplet's wrapper exe +
       # sidecar + shard, and the manifest.json + SHA256SUMS.txt trust
@@ -483,6 +516,18 @@ jobs:
             cp "$dir/$exe" "$dir/$exe.sha256" "$shard" attest-staging/
           done
           cp manifest.json SHA256SUMS.txt attest-staging/
+      # The detached signatures are part of what this tag ships, so they
+      # are attested with the rest — read back from the release (the signer
+      # converged them there; it keeps no second copy) and only when the
+      # signing arm produced them.
+      - name: Stage the signature sidecars
+        if: ${{ always() && startsWith(github.ref, 'refs/tags/') && vars.TEBAKO_RELEASE_SIGNING_ENABLED == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$GITHUB_REF_NAME" --repo tamatebako/tebako-runtime-jruby \
+            --pattern '*.asc' --dir attest-staging --clobber
+          ls attest-staging/*.asc | wc -l
       - name: Attest build provenance
         if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

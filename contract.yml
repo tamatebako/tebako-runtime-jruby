@@ -1,0 +1,11 @@
+# Release-side contract pins for this factory.
+#
+# This repo builds a UNIVERSAL env image on the java owner pair, so it
+# carries none of the source-factory contract axes (contract_version,
+# mount_root, container_version) — those live where the interpreter is
+# compiled (tamatebako/ruby, tamatebako/tebako-runtime-openjdk) and are
+# read from the composed pair.
+#
+# release_tooling: the tamatebako/tebako-release tag the publish and sign
+# jobs run (Gemfile reads this key; one edit bumps the machinery).
+release_tooling: "v0.5.1"
