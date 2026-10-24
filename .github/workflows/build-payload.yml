@@ -586,3 +586,29 @@ jobs:
               --body "Automated registry entry for ${{ github.ref_name }} (the build-payload publish job; main is protected, so the registry lands by PR)."
           fi
           gh pr merge --auto --squash "$branch" || gh pr merge --squash "$branch"
+      # The official registry aggregates these per-factory registries on a
+      # six-hour cron (spec 37 §6's pull model), so without this a fresh
+      # publish stays invisible to `tebako install` for up to six hours.
+      # The dispatch is the immediacy half, and it fires AFTER the entry
+      # lands: the aggregate re-reads the factory's file, so waking it
+      # first would rebuild the same stale rows.
+      - name: Wake the official registry (immediacy dispatch)
+        if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GH_TOKEN: ${{ secrets.TEBAKO_CI_PAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch="publish/${GITHUB_REF_NAME}-registry"
+          # `--auto` returns before the merge happens; wait for it, but
+          # never fail the publish on the wait — the cron is the floor.
+          for _ in $(seq 1 30); do
+            state="$(gh pr view "$branch" --json state --jq .state 2>/dev/null || echo UNKNOWN)"
+            [ "$state" = "MERGED" ] && break
+            sleep 10
+          done
+          echo "registry PR '$branch' state: ${state:-UNKNOWN}"
+          gh api repos/tebako-packages/registry/dispatches \
+            -f event_type=feedstock-published \
+            -f "client_payload[repo]=$GITHUB_REPOSITORY" \
+            -f "client_payload[tag]=$GITHUB_REF_NAME"
+          echo "woke the official registry for $GITHUB_REPOSITORY $GITHUB_REF_NAME"
