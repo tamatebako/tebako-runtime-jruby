@@ -27,29 +27,53 @@ payloads:
     implementation: jruby
     platforms:
       aarch64-linux-gnu:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
       aarch64-linux-musl:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
       aarch64-macos:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
       aarch64-windows-ucrt:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
       x86_64-linux-gnu:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
       x86_64-linux-musl:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
       x86_64-macos:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
       x86_64-windows-ucrt:
-        artifact: tebako-runtime-2.8.50-jruby-10.1.1.0-universal.tfs
-        sha256: '7b52c5f6514ac63e91402de34d9b570e3af5aac8b36608f334956841f29aba50'
+        artifact: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs
+        sha256: 'e93a1888bc392f19e106e712865cc77b22b79bf1b77fee5f39ba7bbd346b9029'
+        blksum:
+          filename: tebako-runtime-2.8.60-jruby-10.1.1.0-universal.tfs.blksum.json
+          sha256: '27ec4055a0796009081e05ac70a098a423aa9dfc24eee2094d83d6cd93c2aa76'
     release:
-      ref: tfs:github:tamatebako/tebako-runtime-jruby:v2.8.50
+      ref: tfs:github:tamatebako/tebako-runtime-jruby:v2.8.60
   default: '10.1.1.0'
