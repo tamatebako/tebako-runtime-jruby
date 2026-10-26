@@ -156,16 +156,16 @@ runtime:
   # (v2.8.50, fetched 2026-10-21) — one per platform the coverage list
   # above declares (the launcher's windows-ucrt-arm64 asset ships since
   # v2.8.46, so the full temurin surface is pinnable on this line).
-  wrapper_tebako: "2.8.61"
+  wrapper_tebako: "2.8.62"
   wrapper_sha256:
-    macos-arm64: "3c1e6e7d15802e379ac25fdb7c0183eb412f549d07369e475d4d7fe7d54986ab"
-    macos-x86_64: "ebdf596f6f8501e973dd94690e410ff7ee6fe06be0b7690d9972422b862b75f1"
-    linux-gnu-x86_64: "f6f0e1b473906d220d5503a3e49bdef18499786e82164087aa8913e738c41f7b"
-    linux-gnu-arm64: "d469ea14851d8d4af189f0118363e219f44423304ff2eae79a27db36f6a537d4"
-    linux-musl-x86_64: "282fd5645ef43f64ea0baf1f207c82e0ce5965b2a0786bfd951a9fa6d9ec09f1"
-    linux-musl-arm64: "fb8e68529021e8613127ef7c2b8b67ab845486f6ce2c0da8e14bf3b1fc7c5abd"
-    windows-ucrt64: "32ba09fe5a31c263179e97dcbb79ac20cb23bd7e79c472bb1dd84a1ac21ac72e"
-    windows-ucrt-arm64: "2918cc16831d44c9aab3396314f93ffe5d7c9664b13d25a24be3c7f96854b26d"
+    macos-arm64: "203ca62053f781415ae33bcf68cddf0037245c91388166de1caaf6299f2d1085"
+    macos-x86_64: "5fa0b6b65b7dc53deb5cbfa375f4ac0560c5dd9cb663d333034d735b4d147131"
+    linux-gnu-x86_64: "07821a2f407b5736f8a36919e5c8f9442a28b2182b55a4228cb6b6e5e9510516"
+    linux-gnu-arm64: "025d377e4b5bdd6823667f42bcef8b4c9287e86b887421d0ebd467ad8b8b564f"
+    linux-musl-x86_64: "efbce02f4daeef2225cecf8239776c68a21d5e2db8f8ea3538f0af5e8dedafc5"
+    linux-musl-arm64: "007cf9c0acd3ee0bcaa64de05747b8e48e87fa333be4be7a065f0db3bc306da3"
+    windows-ucrt64: "93fdb4799f0749f2853065e86a2727eee882b414d78071a1de249bae70ab14aa"
+    windows-ucrt-arm64: "3b4497880bccc4530353501dcd6be2373fee15e0d871e1a7da1f7095754a3927"
 
 # Factory tools used by tools/build: the tfs CLI (the in-process imager)
 # and tebako-shim (the composed smoke's dispatcher) from the
@@ -194,7 +194,7 @@ runtime:
 # cross-check (the owner release's sidecars included) run unchanged.
 tools:
   repo: "tamatebako/tebako"
-  release: "v2.8.61"
+  release: "v2.8.62"
   # Asset platforms the pinned line ships NO native tebako-shim for (the
   # runtime-own surface). Recipe data, never a code-side guess (spec 00
   # §9): pins.rb skips the shim pin for a listed platform — a NATIVE shim
@@ -204,22 +204,22 @@ tools:
     - windows-ucrt-arm64
   sha256:
     tfs:
-      macos-arm64: "8becc09e7f44ed86ff67117edac2a9779f664a74a2b37e7fd7134fbe782559c2"
-      macos-x86_64: "950d6700e2a12b090877f8a198adc11e2cb7547d46b35d5757ca4ef47b64a3f3"
-      linux-gnu-x86_64: "16f7d396fca413952002b1b7bfa53462c07720b63e3e83be513e200f885f3354"
-      linux-gnu-arm64: "7f7aea7609ca4ce2b3615ae879cd524f13aea157f0c6ecf8accea81f3e2feabe"
-      linux-musl-x86_64: "f309a312441969c29686de2998562a9a2a41a23f79c6300a054e4714cd7d0eb1"
-      linux-musl-arm64: "b8e41d6d6646a7550640572a9e3180001b95d7d4672f7abf7120019c87fe7a99"
-      windows-ucrt64: "fb4d0fef81bc8664a9132964b1e74e5c40fcfaecd7cee93b1e5eef316ce225d1"
-      windows-ucrt-arm64: "ca3fa9f40a6be27eb114c2cf0201935ac8cdc7c5db00391ba43f08c2bbeca3c9"
+      macos-arm64: "2431f044c1e38553bae71b73bc0aba771fd872bb9b140e70ad6ee9dbfcf4fbde"
+      macos-x86_64: "52c114392bccc6095f8f62a31e31da66324c9bee8deabfda6a7fa83b97648a08"
+      linux-gnu-x86_64: "d94ffc3f8089c8d030047f686db6bbb68c746149d90bb3af0cee59bd2006f5a0"
+      linux-gnu-arm64: "488e4f0c80538067cc1ff8999c3636c8783b55b834ea791df167e535364c281d"
+      linux-musl-x86_64: "f93b31ff6a878320a38db4999e06f1adef0abc7097df2782947dbd8785514497"
+      linux-musl-arm64: "cbf9d0aeeb9d16f4eab1444605ab2ae11e303e16047166305d511baeee80c7a8"
+      windows-ucrt64: "1a4055271699bd5bfc3b4bec78e0b92f21d86db2373b5a70241bb588d607e543"
+      windows-ucrt-arm64: "006bc48aa1808b6761e332fdc6fa9c2cb0141734bf933f5f742abe00f3041f9d"
     tebako-shim:
-      macos-arm64: "8d3ed1768b2d188dd6f1cf9c025937421385d45c48a7e170852788d466f3de6e"
-      macos-x86_64: "a56700720bbef79d9460922f25d93ec15d2570db7acdc449bf0ffe45b0655891"
-      linux-gnu-x86_64: "1fd147c30f7e69c9457ca71d32ece75a4e63065e2e54ca2751b54fee47c18613"
-      linux-gnu-arm64: "87f3f3b44ba0079a0aa3c4097c1eab51638c4ca7286bdebe490e8ed17e8482a9"
-      linux-musl-x86_64: "2364d2a625cd03005427a9ee8246e4918e55a241cae2876e977f13b46aeaf7d1"
-      linux-musl-arm64: "3ecd804d5fd657a5c593e0b56c7e1d8f7e550cf3a66c5205d21c6bcfed5c2c02"
-      windows-ucrt64: "668a7c60ac12c4df8ba64643877993112a86a600521c8d567ba3983918623a2e"
+      macos-arm64: "16bf3457113f8902db7d656671108013abb1a620f5c587bc9e9452e60e063985"
+      macos-x86_64: "a7384c2719a7e4f27b1db75ee1e6d717a4c4ec8ef3bcb043104998faaaae6675"
+      linux-gnu-x86_64: "0ae4290cb5fee040bd4572649fbb57640a67c2974db43b11795f4db92464e01d"
+      linux-gnu-arm64: "8e558dfc11e9a30db281f3379a4792eadf2504d9b383a5e880efed6e0ae1e203"
+      linux-musl-x86_64: "7de4b5dc729e4b2028814ce357cfe7ae7f0fa2ac46f839d84d6d3e1ab7ce2847"
+      linux-musl-arm64: "7b20db698caa1b9f1e593195bb3438be316ee6b5b001d7ceada1336e43d6a508"
+      windows-ucrt64: "2e80f74435ad2ead60c66456262ecbe33b7f2c8b28aca85b0d1df753af093d29"
 
 image:
   format: limnifs
