@@ -74,12 +74,12 @@ flavors:
       # URL, not just the recipe). strip_components 1 (the archive nests
       # jruby-<ver>/). ONE universal source — every leg images the same
       # tree.
-      version: "10.1.1.0"
-      tag: "10.1.1.0"              # the maven version (the release-index provenance)
+      version: "10.1.2.0"
+      tag: "10.1.2.0"              # the maven version (the release-index provenance)
       sources:
         - platform: "universal"
-          url: "https://repo1.maven.org/maven2/org/jruby/jruby-dist/10.1.1.0/jruby-dist-10.1.1.0-bin.tar.gz"
-          sha256: "1e08bff6a7f0134a4774fba37d8cf88b9dd4a7317bd49fca5af696a327450148"
+          url: "https://repo1.maven.org/maven2/org/jruby/jruby-dist/10.1.2.0/jruby-dist-10.1.2.0-bin.tar.gz"
+          sha256: "6dcb361bc1df554803fdd0243dc7c7a42723ac88a4b6f66830026afe82db28a8"
           strip_components: 1
     # The composed smoke's owner pair: the PUBLISHED temurin java runtime
     # (tamatebako/tebako-runtime-openjdk v2.8.50 — the first owner release
