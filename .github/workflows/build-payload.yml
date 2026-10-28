@@ -27,10 +27,12 @@ name: build-payload
 # ships no dispatcher for (the win-arm64 leg — see the matrix comment). The publish job uploads all of it, derives the monoliths
 # (manifest.json + SHA256SUMS.txt, trr#140) from the shards + sidecars,
 # renders the registry entry from manifests/registry.yaml, and lands it
-# by bot PR. The bot PR rides the CI PAT (tebako#686): a
-# GITHUB_TOKEN-authored PR never triggers pull_request workflows, so
-# its checks would pend forever and auto-merge never fire — and the
-# legs below skip the bot PR's registry-only file set.
+# by bot PR. The bot PR rides the tebako-fleet App's installation token
+# (tebako#686, tebako-release#3): a GITHUB_TOKEN-authored PR never
+# triggers pull_request workflows, so its checks would pend forever and
+# auto-merge never fire — and an App token carries its own rate budget
+# instead of spending a shared user PAT. The legs below skip the bot
+# PR's registry-only file set.
 # `tebako publish` is NOT used: the CLI refuses kind: runtime.
 #
 # PIN DISCIPLINE (the owner's rule): this workflow carries NO version or
@@ -354,11 +356,30 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      # The checkout rides the CI PAT so the registry bot branch's push
-      # is the PAT's doing as well (tebako#686 — the publish step below).
+      # The fleet identity (tebako-release#3): installation tokens of the
+      # tebako-fleet App — own rate budget, and app-pushed branches fire
+      # pull_request CI (a GITHUB_TOKEN never does). The registry-org
+      # token is minted for the tebako-packages installation because the
+      # aggregate wake dispatches into tebako-packages/registry. Minted
+      # before the checkout: the checkout itself rides the fleet token so
+      # the registry bot branch's push is the App's doing as well
+      # (tebako#686 — the publish step below).
+      - name: Mint the fleet token
+        id: fleet
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.TEBAKO_CI_APP_ID }}
+          private-key: ${{ secrets.TEBAKO_CI_APP_PRIVATE_KEY }}
+      - name: Mint the registry-org token
+        id: fleet_registry
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.TEBAKO_CI_APP_ID }}
+          private-key: ${{ secrets.TEBAKO_CI_APP_PRIVATE_KEY }}
+          owner: tebako-packages
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ secrets.TEBAKO_CI_PAT_TOKEN }}
+          token: ${{ steps.fleet.outputs.token }}
       - name: Collect payloads (all legs)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -484,8 +505,8 @@ jobs:
         if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.TEBAKO_CI_PAT_TOKEN || secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.TEBAKO_CI_PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.fleet.outputs.token }}
+          GH_TOKEN: ${{ steps.fleet.outputs.token }}
           TEBAKO_RELEASE_REPO: ${{ github.repository }}
           TEBAKO_RELEASE_SIGNING_ENABLED: ${{ vars.TEBAKO_RELEASE_SIGNING_ENABLED }}
           TEBAKO_RELEASE_SIGNING_KEY: ${{ secrets.TEBAKO_RELEASE_SIGNING_KEY }}
@@ -559,13 +580,13 @@ jobs:
       # main is branch-protected (and the GitHub-Actions bypass is not
       # available on this plan): the registry lands by bot PR + auto-merge,
       # never by direct push. Idempotent across re-runs of the same tag.
-      # The PR is created AND merged under the CI PAT (tebako#686): a
-      # GITHUB_TOKEN-authored PR never triggers pull_request workflows,
-      # so its checks would sit pending forever and auto-merge would
-      # never fire.
+      # The PR is created AND merged under the fleet App's token
+      # (tebako#686, tebako-release#3): a GITHUB_TOKEN-authored PR never
+      # triggers pull_request workflows, so its checks would sit pending
+      # forever and auto-merge would never fire.
       - name: Publish the registry entry via pull request
         env:
-          GH_TOKEN: ${{ secrets.TEBAKO_CI_PAT_TOKEN }}
+          GH_TOKEN: ${{ steps.fleet.outputs.token }}
         run: |
           set -euo pipefail
           git config user.name "tebako-ci"
@@ -601,7 +622,7 @@ jobs:
       - name: Wake the official registry (immediacy dispatch)
         if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
         env:
-          GH_TOKEN: ${{ secrets.TEBAKO_CI_PAT_TOKEN }}
+          GH_TOKEN: ${{ steps.fleet_registry.outputs.token }}
         run: |
           set -euo pipefail
           branch="publish/${GITHUB_REF_NAME}-registry"
