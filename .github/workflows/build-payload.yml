@@ -168,7 +168,7 @@ jobs:
         platform:
           - triplet: aarch64-macos
             asset_platform: macos-arm64
-            os: macos-14
+            os: macos-15
             exe_suffix: ""
           # The Intel macOS leg rides the macos-15-intel runner (macos-13
           # is retired; the openjdk factory's same leg runs there).
@@ -352,7 +352,7 @@ jobs:
       pull-requests: write
       attestations: write
       id-token: write
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
