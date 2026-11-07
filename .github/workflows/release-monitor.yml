@@ -7,7 +7,10 @@
 # into a pull request. The dist bytes come from Maven Central, so the digest
 # is the .sha256 sidecar Maven Central publishes beside the artifact (JRuby's
 # GitHub release publishes .sha512 only). A newer line is reported and
-# deliberately not crossed. Never merges — the bump PR rides the PR checks
+# deliberately not crossed. A newer release whose assets are still
+# mid-staging is a HELD verdict, not a red lane (the monitor never pins
+# bytes upstream has not published; a gate expected to be red teaches
+# people to ignore it). Never merges — the bump PR rides the PR checks
 # and merges like every other PR.
 name: release-monitor
 
