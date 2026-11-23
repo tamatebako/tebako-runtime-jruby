@@ -36,15 +36,15 @@ name: build-payload
 # `tebako publish` is NOT used: the CLI refuses kind: runtime.
 #
 # TRUST PLANE (all gates off byte-identical — spec 00 invariant 7): the
-# x86_64 windows leg Azure-Trusted-Signs the fetched wrapper exe IN-LEG
+# windows legs Azure-Trusted-Sign the fetched wrapper exe IN-LEG
 # before tools/build pairs+hashes it (spec 34 §8.2 — sign-then-hash by
 # construction, never a re-hash), and the macos legs Developer-ID-sign +
 # notarize it the same way (spec 31 §5/§8.4 — the
 # tools/runtime.entitlements pair, gated on the APPLE_SIGNING_ENABLED
-# repo variable). The win-arm64 leg ships Authenticode-unsigned by the
-# ecosystem's deliberate posture (the product ships its own
-# windows-ucrt-arm64 binaries unsigned the same way; the arm64
-# Azure-signing story is the product's phase 3), and every leg OpenPGP-
+# repo variable). BOTH windows legs sign (tebako#1105 — the product's
+# phase-3 arm64 lane: the AZURE_* org secrets cover this repo, and the
+# node + ruby factories already run this exact block green on
+# windows-11-arm), and every leg OpenPGP-
 # signs its own served names right after the publish job uploads them
 # on signing-enabled lines (spec 09 §5, the tebako-release gem's
 # signer). The wrapper is this repo's ONE shippable host-level
@@ -178,8 +178,8 @@ jobs:
       pull-requests: write
       id-token: write
     # Spec 34's attestation boundary (see the id-token note above). The
-    # pair job is shared by every platform's legs — only the x86_64
-    # windows leg ever arms the signing chain, but ALL legs carry the
+    # pair job is shared by every platform's legs — only the windows
+    # legs ever arm the signing chain, but ALL legs carry the
     # environment: it must NEVER gain required reviewers (that would gate
     # every platform's build on an approval); protection rules stay
     # empty.
@@ -355,13 +355,11 @@ jobs:
       # _build-platform.yml ← tamatebako/tebako PR #566+#570): when the
       # repo variable WINDOWS_SIGNING_ENABLED=true, the fetched wrapper
       # exe is Azure Trusted Signed here — after its pin-verified
-      # download, BEFORE tools/build pairs it into out/. X64 ONLY by
-      # deliberate posture: the aarch64 leg's wrapper passes through
-      # unsigned (the product ships its own windows-ucrt-arm64 binaries
-      # Authenticode-unsigned; the arm64 signing story is the product's
-      # phase 3 — when it lands, this block's condition widens to both
-      # windows legs). Signing rides a sign-staging/ COPY, never the
-      # contract path directly (the trr#157 shape): the action
+      # download, BEFORE tools/build pairs it into out/. BOTH windows
+      # legs sign (tebako#1105 — the product's phase-3 arm64 lane; the
+      # node + ruby factories' aarch64 legs already run this exact block
+      # green on windows-11-arm). Signing rides a sign-staging/ COPY,
+      # never the contract path directly (the trr#157 shape): the action
       # enumerates by EXTENSION, so the staging step copies the wrapper
       # under sign-staging/ with a PE extension, the action signs there,
       # and the verify step moves the signed bytes BACK over the contract
@@ -375,7 +373,7 @@ jobs:
       # unsigned, byte-identically to today (spec 00 invariant 7 — §7.4
       # gate-off parity).
       - name: Arm check — Windows signing (spec 34 §4)
-        if: matrix.platform.triplet == 'x86_64-windows-ucrt'
+        if: contains(matrix.platform.triplet, 'windows')
         id: signgate
         shell: bash
         env:
